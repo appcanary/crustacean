@@ -1,4 +1,4 @@
-(ns crustacean.core-test
+(ns crustacean.util-test
   (:require [clojure.test :refer :all]
             [crustacean.core :refer :all]))
 
