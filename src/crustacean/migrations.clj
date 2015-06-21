@@ -69,7 +69,7 @@
        ;; Special case if we add and delete only one field and it's the same type --- we rename the field
        (if (and (= 1 (count added-fields))
                 (= 1 (count deleted-fields))
-                (= (get new-entity (first added-fields) (get old-entity (first deleted-fields)))))
+                (= (get new-entity (first added-fields)) (get old-entity (first deleted-fields))))
          [{:db/id (keyword nm (first deleted-fields))
            :db/ident (keyword nm (first added-fields))}]
 
@@ -128,4 +128,3 @@
        (migrations->schema migrations)))
    ;; If we're not saving the migrations, just return a schema
      (migrations->schema (ordered-map  (:migration-version entity) entity)))))
-
