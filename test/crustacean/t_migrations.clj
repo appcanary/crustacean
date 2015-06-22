@@ -26,6 +26,8 @@
 
 (def db-name "datomic:mem://migration-test")
 (def migration-file "resources/testdata/migrations.edn")
+(def migration-file (.getAbsolutePath (java.io.File/createTempFile "migrations" ".edn")))
+(delete-file migration-file)
 
 (defentity user
   (:migration-file migration-file)
