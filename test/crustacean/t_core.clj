@@ -1,11 +1,12 @@
-(ns crustacean.t_generators
+(ns crustacean.t_core
   (:require [midje.sweet :refer :all]
             [datomic.api :as d]
             [schema.core :as s]
             [io.rkn.conformity :as c]
 
             [crustacean.core :refer [defentity]]
-            [crustacean.generators :refer :all]
+            [crustacean.core :refer :all]
+            [crustacean.utils :refer [remove-nils]]
             [crustacean.migrations :refer [sync-migrations]]))
 
 
@@ -39,14 +40,6 @@
       (d/create-database db-url)
       (c/ensure-conforms (get-conn) (sync-migrations entity))))
 
-(fact "`fields-with` finds fields with a given option set"
-  (fields-with entity :indexed) => ["field3"]
-  (fields-with entity :many) =>  (just ["field4" "field7"] :in-any-order)
-  (fields-with entity :component) => ["field6"])
-
-(fact "`unique-fields` finds fields with a unique property set"
-  (unique-fields entity) => (just ["field1" "field2"] :in-any-order))
-
 (fact "`field-spec->schema` converts a field spec to a prismatic schema"
   (field-spec->schema (get-in entity [:fields "field1"])) => `s/Keyword
   (field-spec->schema (get-in entity [:fields "field2"])) => `s/Str
@@ -61,11 +54,64 @@
   (field-spec->schema (get-in entity [:fields "field11"])) => `bytes
   (field-spec->schema (get-in entity [:fields "field12"])) => `s/Any)
 
-;; I can't seem to get this test to work
-#_(facts "about `->input-schema*`"
-    (->input-schema* entity) => `{:field1 s/Keyword
-                                  (s/optional-key :field7) [(s/either s/Int {s/Keyword s/Any})]
-                                  (s/optional-key :field2) s/Str })
+(fact "`defentity*` convers forms to an entity definition"
+  ;; ..name.. is quoted here because it's passed as a symbol (as this is called by a macro)
+  (defentity* '..name.. '[(:migration-file ..file..)]) => (contains {:migration-file ..file..})
+  (defentity* '..name.. '[(:migration-version ..version..)]) => (contains {:migration-version ..version..})
+
+  ;; follow the convention of datomic-schema
+  (defentity* '..name.. '[(:fields [:field ..type.. :opt :opt2])]) => (contains {:fields {"field" [..type.. #{:opt :opt2}]}})
+
+  (defentity* '..name.. '[(:defaults [:field ..value..])]) => (contains {:defaults {"field" ..value..}})
+  (defentity* '..name.. '[(:defaults [:field (fn [] ..result..)])]) => (contains {:defaults {"field" '(quote (fn [] ..result..))}})
+
+  (defentity* '..name.. '[(:validators [:field ..regex..])]) =>  (contains {:validators {"field" ..regex..}})
+  (defentity* '..name.. '[(:validators [:field '(fn [] ..result..)])]) => (contains {:validators {"field" ''(quote (fn [] ..result..))}})
+
+  (defentity* '..name.. '[(:composite-keys [..key.. ..anotherkey..])]) => (contains {:composite-keys [[:..key.. :..anotherkey..]]})
+
+  (defentity* '..name.. '[(:views :one ..view-for-one.. :many ..view-for-many..)]) => (contains {:views {:one ..view-for-one.. :many ..view-for-many..}})
+
+  (defentity* '..name.. '[(:backrefs [..field.. ..opt..])]) => (contains {:backrefs {:..field.. ..opt..}})
+  (defentity* '..name.. '[(:extra-txes ..tx..)]) => (contains {:extra-txes ..tx..})
+
+  ;; these are needed for datomic-schema
+  (defentity* '..name.. '()) => (contains {:name "..name.."})
+  (defentity* '..name.. '()) => (contains {:basetype :..name..})
+  (defentity* '..name.. '()) => (contains {:namespace "..name.."}))
+
+(facts "about `->input-schema*`"
+  (let [empty (defentity* 'entity '())
+        unsettable-fields (defentity* 'entity '[(:fields [..field.. :string])])
+        permitted-fields (defentity* 'entity '[(:fields [..field.. :string :assignment-permitted])])
+        required-fields (defentity* 'entity '[(:fields [..field.. :string :assignment-required])])
+        validators (defentity* 'entity '[(:fields  [..field.. :string :assignment-required]
+                                                   [..field2.. :string :assignment-required])
+                                         (:validators [..field.. ..regex..]
+                                                      [..field2.. '(fn [] "function")])])
+        backrefs (defentity* 'entity '[(:fields  [..field.. :string :assignment-required])
+                                       (:backrefs [back/ref :assignment-required]
+                                                  [back/ref2 :assignment-permitted])])]
+    
+    (->input-schema* empty) => {}
+    (->input-schema* unsettable-fields) => {}
+    (->input-schema* permitted-fields) => `{(s/optional-key :..field..) s/Str}
+    (->input-schema* required-fields) => `{:..field.. s/Str}
+    (->input-schema* validators) => `{:..field.. (s/both s/Str ..regex..)
+                                      :..field2.. (s/both s/Str (s/pred ~''(quote (fn [] "function"))))}
+    (->input-schema* backrefs) => `{:..field.. s/Str
+                                    :back/ref (s/either s/Int {s/Keyword s/Any})
+                                    (s/optional-key :back/ref2) (s/either s/Int {s/Keyword s/Any})}))
+
+
+(facts "about `->ouput-schema`"
+  (let [entity (defentity* 'entity '[(:fields  [..field.. :string]
+                                               [..field2.. :ref])
+                                     ])]
+    (->output-schema entity) => (s/schema-with-name {:id Long
+                                                     s/Keyword s/Any
+                                                     (s/optional-key :..field..) s/Str
+                                                     (s/optional-key :..field2..) s/Any} "EntityOut")))
 
 (future-fact "`about ->malformed?*`")
 

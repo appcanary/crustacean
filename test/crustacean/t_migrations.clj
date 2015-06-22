@@ -24,17 +24,10 @@
       m)
     (dissoc m k)))
 
-
-
-;; This is hacky
-
-
 (def db-name "datomic:mem://migration-test")
 (def migration-file "resources/testdata/migrations.edn")
 
-
-
-(defentity user 
+(defentity user
   (:migration-file migration-file)
   (:migration-version "0")
   (:fields   [email      :string :unique-value :indexed :assignment-required]
@@ -46,46 +39,45 @@
   (:validators [email #"@"]))
 
 (def schema (sync-migrations user))
-(with-state-changes [(before :facts (do
-                                      (d/delete-database db-name)
-                                      (d/create-database db-name)
-                                      (when (.exists (as-file migration-file))
-                                        (delete-file migration-file))
-                                      (c/ensure-conforms (d/connect db-name) (sync-migrations user true))))
-                     (after :facts (when (.exists (as-file migration-file))
-                                     (delete-file migration-file)))]
+(namespace-state-changes [(before :facts (do
+                                           (d/delete-database db-name)
+                                           (d/create-database db-name)
+                                           (when (.exists (as-file migration-file))
+                                             (delete-file migration-file))
+                                           (c/ensure-conforms (d/connect db-name) (sync-migrations user true))))
+                          (after :facts (when (.exists (as-file migration-file))
+                                          (delete-file migration-file)))])
 
-  (fact "lol")
-  (facts "about sync-migrations"
-    #_(fact "can add fields"
-      (let [conn (d/connect db-name)
-            updated-entity (-> (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}])
-                               (assoc :migration-version "1"))]
-        (d/pull  (d/db conn) '[:db/ident] :user/email) => {:db/ident :user/email}
-        (d/pull  (d/db conn) '[:db/ident] :user/name) => nil
 
-        (c/ensure-conforms conn (sync-migrations updated-entity true))
-        (d/pull (d/db conn) '[:db/ident] :user/name) => {:db/ident :user/name}))
-    
-    (fact "can delete fields"
-      (let [conn (d/connect db-name)
-            updated-entity (-> (dissoc-in user [:fields "email"])
-                               (assoc :migration-version "2"))]
-          (c/ensure-conforms conn (sync-migrations updated-entity true))
-          (d/pull  (d/db conn) '[:db/ident] :user/email) => {:db/ident :unused/user/email}))
-    #_(fact "can rename a field"
-      (let [conn (d/connect db-name)
-            updated-entity (-> (dissoc-in user [:fields "email"])
-                               (assoc-in [:fields "email2"] [:string #{:unique-value :indexed :assignment-required}])
-                               (assoc :migration-version "3"))
-            [_ userid] (first  (:tempids @(d/transact conn [{:db/id (d/tempid :db.part/user) :user/email "test@example.com"}])))]
-        (c/ensure-conforms conn (sync-migrations updated-entity true))
-        (d/pull  (d/db conn) '[:user/email2] userid) => {:user/email2 "test@example.com"}))
-    (fact "it only saves when called with a second parameter"
-        (sync-migrations user true)
-        (let [migrations (slurp migration-file)]
-          (sync-migrations (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}]))
-          (slurp migration-file) => migrations
-          (sync-migrations (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}]) true) =not=> migrations)))
+
+(facts "about `sync-migrations`"
+  (fact "it can add fields"
+    (let [conn (d/connect db-name)
+          updated-entity (-> (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}])
+                             (assoc :migration-version "1"))]
+      (d/pull  (d/db conn) '[:db/ident] :user/email) => {:db/ident :user/email}
+      (d/pull  (d/db conn) '[:db/ident] :user/name) => nil
+
+      (c/ensure-conforms conn (sync-migrations updated-entity true))
+      (d/pull (d/db conn) '[:db/ident] :user/name) => {:db/ident :user/name}))
   
-  )
+  (fact "it can delete fields"
+    (let [conn (d/connect db-name)
+          updated-entity (-> (dissoc-in user [:fields "email"])
+                             (assoc :migration-version "2"))]
+      (c/ensure-conforms conn (sync-migrations updated-entity true))
+      (d/pull  (d/db conn) '[:db/ident] :user/email) => {:db/ident :unused/user/email}))
+  (fact "it can rename a field"
+    (let [conn (d/connect db-name)
+          updated-entity (-> (dissoc-in user [:fields "email"])
+                             (assoc-in [:fields "email2"] [:string #{:unique-value :indexed :assignment-required}])
+                             (assoc :migration-version "3"))
+          [a userid] (first  (:tempids @(d/transact conn [{:db/id (d/tempid :db.part/user) :user/email "test@example.com"}])))]
+      (c/ensure-conforms conn (sync-migrations updated-entity true))
+      (d/pull  (d/db conn) '[:user/email2] userid) => {:user/email2 "test@example.com"}))
+  (fact "it only saves when called with a second parameter"
+    (sync-migrations user true)
+    (let [migrations (slurp migration-file)]
+      (sync-migrations (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}]))
+      (slurp migration-file) => migrations
+      (sync-migrations (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}]) true) =not=> migrations)))

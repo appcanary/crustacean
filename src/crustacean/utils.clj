@@ -23,3 +23,21 @@
      {} mp)
     mp))
 
+(defn remove-nils
+  "Remove keys with nil values"
+  [input-map]
+  (into {} (remove #(nil? (second %)) input-map)))
+
+(defn fields-with
+  "Returns names of fields in an entity with given option set"
+  [entity attr]
+  (->> (:fields entity)
+       (filter (fn [[field [type opts]]]
+                 (opts attr)))
+       (map first)))
+
+(defn unique-fields
+  "Returns the name of fields set to unique "
+  [entity]
+  (concat (fields-with entity :unique-value)
+          (fields-with entity :unique-identity)))
