@@ -13,6 +13,6 @@
                  [datomic-schema "1.2.2"]]
   :profiles {:repl {:main user}
              :dev {:source-paths ["dev"]
-                   :plugins [[[lein-midje "3.1.3"]]]
+                   :plugins [[lein-midje "3.1.3"]]
                    :dependencies [[midje "1.7.0-beta1"]
                                   [io.rkn/conformity "0.3.3" :exclusions [com.datomic/datomic-free]]]}})
