@@ -2,84 +2,71 @@
   (:require [midje.sweet :refer :all]
             [datomic.api :as d]
             [io.rkn.conformity :as c]
-            [clojure.java.io :refer [delete-file]]
-            [clojure.java.io :refer [as-file]]
+            [flatland.ordered.map :refer [ordered-map]]
 
             [crustacean.core :refer :all]
             [crustacean.migrations :refer :all]))
 
+(facts "about `migration-txes`"
+  (let [entity1 (defentity* 'name '[(:fields [field1 :string])])
+        entity2 (defentity* 'name '[(:fields [field1 :string]
+                                             [field2 :string])])
+        entity3 (defentity* 'name '[(:fields [field2 :string])])]
 
-;; From https://github.com/clojure/core.incubator/blob/master/src/main/clojure/clojure/core/incubator.clj#L56
-(defn dissoc-in
-  "Dissociates an entry from a nested associative structure returning a new
-  nested structure. keys is a sequence of keys. Any empty maps that result
-  will not be present in the new structure."
-  [m [k & ks :as keys]]
-  (if ks
-    (if-let [nextmap (get m k)]
-      (let [newmap (dissoc-in nextmap ks)]
-        (if (seq newmap)
-          (assoc m k newmap)
-          (dissoc m k)))
-      m)
-    (dissoc m k)))
+    (fact "it can add fields"
+      (migration-txes entity1 entity2) => (just [(contains {:db/ident :name/field2
+                                                            :db/valueType :db.type/string})])
+      (provided (db-functions entity2) => nil))
+    (fact "it can remove fields"
+      (migration-txes entity2 entity1) => [{:db/id :name/field2
+                                            :db/ident :unused/name/field2}]
+      (provided (db-functions entity1) => nil))
+    (fact "it can rename fields"
+      (migration-txes entity1 entity3) => [{:db/id :name/field1
+                                            :db/ident :name/field2}]
+      (provided (db-functions entity3) => nil))))
 
-(def db-name "datomic:mem://migration-test")
-(def migration-file "resources/testdata/migrations.edn")
-(def migration-file (.getAbsolutePath (java.io.File/createTempFile "migrations" ".edn")))
-(delete-file migration-file)
+(fact "`migration->norms` generates a map of norms for a sequence of migrations"
+  (migrations->norms []) => nil
+  (migrations->norms [[..version.. ..entity..]]) => (ordered-map {:entity-..version.. {:txes [..initial-txes..]}})
+  (provided (initial-txes ..entity..) => ..initial-txes..
+            ..entity.. =contains=> {:name "entity"})
 
-(defentity user
-  (:migration-file migration-file)
-  (:migration-version "0")
-  (:fields   [email      :string :unique-value :indexed :assignment-required]
-             [servers    :ref     :many :indexed :component]
-             [web-token   :string  :unique-value :indexed]
-             [agent-token :string  :unique-value :indexed])
-  (:defaults [web-token (fn [] (.toString (BigInteger. 256 (java.security.SecureRandom.)) 32))]
-             [agent-token  (fn [] (.toString (BigInteger. 256 (java.security.SecureRandom.)) 32))])
-  (:validators [email #"@"]))
+  (migrations->norms [[..version.. ..entity..]
+                      [..version2.. ..entity2..]]) => (ordered-map {:entity-..version.. {:txes [..initial-txes..]}
+                                                                    :entity-..version2.. {:txes [..migration-txes..]}})
+  (provided (initial-txes ..entity..) => ..initial-txes..
+            (migration-txes ..entity.. ..entity2..) => ..migration-txes..
+            ..entity.. =contains=> {:name "entity"}
+            ..entity2.. =contains=> {:name "entity"}))
 
-(def schema (sync-migrations user))
-(namespace-state-changes [(before :facts (do
-                                           (d/delete-database db-name)
-                                           (d/create-database db-name)
-                                           (when (.exists (as-file migration-file))
-                                             (delete-file migration-file))
-                                           (c/ensure-conforms (d/connect db-name) (sync-migrations user true))))
-                          (after :facts (when (.exists (as-file migration-file))
-                                          (delete-file migration-file)))])
+(fact "`get-migrations` pulls migrations from a file"
+  (get-migrations ..entity..) => ..migrations..
+  (provided
+    ..entity.. =contains=> {:migration-file ..somefile..}
+    (read-string (slurp ..somefile..)) => ..migrations..)
 
+  (get-migrations ..no-migrations-file..) => (throws Exception))
 
+(fact "`write-migrations` writes  migrations to a file"
+  (let [migration-file (java.io.File/createTempFile "migrations" ".edn")
+        entity {:migration-file migration-file}]
+    (.delete migration-file) ;; to get rid of emtpty file
+    (do (write-migrations entity)
+        (slurp migration-file)) => "migrations"
+    (provided
+      (migration-txes entity) => "migrations")))
 
-(facts "about `sync-migrations`"
-  (fact "it can add fields"
-    (let [conn (d/connect db-name)
-          updated-entity (-> (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}])
-                             (assoc :migration-version "1"))]
-      (d/pull  (d/db conn) '[:db/ident] :user/email) => {:db/ident :user/email}
-      (d/pull  (d/db conn) '[:db/ident] :user/name) => nil
-
-      (c/ensure-conforms conn (sync-migrations updated-entity true))
-      (d/pull (d/db conn) '[:db/ident] :user/name) => {:db/ident :user/name}))
-  
-  (fact "it can delete fields"
-    (let [conn (d/connect db-name)
-          updated-entity (-> (dissoc-in user [:fields "email"])
-                             (assoc :migration-version "2"))]
-      (c/ensure-conforms conn (sync-migrations updated-entity true))
-      (d/pull  (d/db conn) '[:db/ident] :user/email) => {:db/ident :unused/user/email}))
-  (fact "it can rename a field"
-    (let [conn (d/connect db-name)
-          updated-entity (-> (dissoc-in user [:fields "email"])
-                             (assoc-in [:fields "email2"] [:string #{:unique-value :indexed :assignment-required}])
-                             (assoc :migration-version "3"))
-          [a userid] (first  (:tempids @(d/transact conn [{:db/id (d/tempid :db.part/user) :user/email "test@example.com"}])))]
-      (c/ensure-conforms conn (sync-migrations updated-entity true))
-      (d/pull  (d/db conn) '[:user/email2] userid) => {:user/email2 "test@example.com"}))
-  (fact "it only saves when called with a second parameter"
-    (sync-migrations user true)
-    (let [migrations (slurp migration-file)]
-      (sync-migrations (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}]))
-      (slurp migration-file) => migrations
-      (sync-migrations (assoc-in user [:fields "name"] [:string #{:indexed :assignment-required}]) true) =not=> migrations)))
+(facts "about `sync-entity`"
+  (fact "it transacts an entity's norms to the database"
+    (sync-entity ..conn.. ..entity..) => ..success..
+    (provided
+      (get-migrations ..entity..) => ..migrations..
+      (migrations->norms ..migrations..) => ..norms..
+      (c/ensure-conforms ..conn.. ..norms..) => ..success..))
+  (fact "it throws if the entity has fields not in the migrations"
+    (sync-entity ..conn.. ..entity..) => (throws Exception)
+    (provided
+      ..entity.. =contains=> {:fields {:field1 [:string #{}]
+                                       :field2 [:int #{}]}}
+      (get-migrations ..entity..) => [:version {:fields {:field1 [:string #{}]}}])))

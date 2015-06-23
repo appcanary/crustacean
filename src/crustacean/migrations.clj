@@ -7,6 +7,7 @@
             [datomic-schema.schema :as datomic-schema]
             [clojure.pprint :refer [pprint]]
             [flatland.ordered.map :refer :all]
+            [io.rkn.conformity :as c]
 
             [crustacean.schemas :refer [Entity]]
             [crustacean.core :refer [->malformed?* ->exists?* ->create*]]
@@ -84,48 +85,45 @@
      (db-functions new-entity)
      (:extra-txes new-entity))))
 
-(defn- migrations->schema
-  "Generate a schema from a vec of migrations"
-  [migrations] ;; this is an ordered map of version => entity at a point in time
-  (->>
-   (conj
-    ;; generate migration for each pair of entities (overlapping)
-    (for [[[old-k old-entity] [new-k new-entity]] (partition 2 1 migrations)]
-      [(keyword (str (:name new-entity) "-" new-k)) {:txes [(migration-txes old-entity new-entity)]}])
-    ;; generate migration for first entity
-    (let [[k entity] (first migrations)]
-      [(keyword (str (:name entity) "-" k)) {:txes [(conj (initial-txes entity))]}]))
-   (into (ordered-map))))
+(defn migrations->norms
+  "Generate a map of norms from a vec of migrations -- pairs of version and entity"
+  [migrations]
+  (when (seq migrations)
+    (->>
+     (conj
+      ;; generate migration for each pair of entities (overlapping)
+      (for [[[old-k old-entity] [new-k new-entity]] (partition 2 1 migrations)]
+        [(keyword (str (:name new-entity) "-" new-k)) {:txes [(migration-txes old-entity new-entity)]}])
+      ;; generate migration for first entity
+      (let [[k entity] (first migrations)]
+        [(keyword (str (:name entity) "-" k)) {:txes [ (initial-txes entity)]}]))
+     (into (ordered-map)))))
 
-(defn sync-migrations
-  "Syncs an entity's migrations to a file. Returns a schema used for the migration"
-  ([entity]
-   (sync-migrations entity false))
-  ([entity save]
-   ;; Only sync migrations when we specify a migrations file
-   (if-let [filename (:migration-file entity)]
-     (if (.exists (as-file filename))
-       ;; File exists so update it
-       (let [migrations (read-string (slurp filename))
-             [last-key last-entity] (last migrations)
-             migrations (if (= (:migration-version entity) (:migration-version last-entity))
-                          ;;If the hash hasn't chnaged, no need to update migrations
-                          migrations
-                          ;; otherwise computer the diff
-                          (do
-                            ;; TODO there's a bug here
-                            #_(throw (Exception. (str  "Migrations for (:name entity)" " not saved. Save the migrations")))
-                            (assoc migrations (:migration-version entity) entity)))]
-         (when save
-           (spit filename (pr-str migrations)))
-         (migrations->schema migrations))
-     ;; File doesn't exist,
-     (let [migrations (ordered-map (:migration-version entity) entity)]
-       (when save
-         (spit filename (pr-str migrations)))
-       (migrations->schema migrations)))
-   ;; If we're not saving the migrations, just return a schema
-     (migrations->schema (ordered-map  (:migration-version entity) entity)))))
+(defn get-migrations
+  "Retrieve an entity's migrations"
+  [entity]
+  (if-let [file (:migration-file entity)]
+    (read-string (slurp file))
+    (throw (Exception. "Migration has no file"))))
 
+(defn write-migrations
+  "Write an entity's migrations to its migration file"
+  [entity]
+  (if-let [file (:migration-file entity)]
+    (if (.exists (clojure.java.io/as-file file))
+      (spit file (assoc (read-string (slurp file))
+                        (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
+                        (migration-txes entity)))
+      (spit file (ordered-map
+                  (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
+                  (migration-txes entity))))
+    (throw (Exception. "Migration has no file"))))
 
-
+(defn sync-entity
+  "Ensure that the database confirms to an entity's norms"
+  [conn entity]
+  (let [migrations (get-migrations entity)
+        [_ last-entity] (last migrations)]
+    (when-not (= (:fields last-entity) (:fields entity))
+      (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (:name entity) "`"))))
+    (c/ensure-conforms conn (migrations->norms migrations))))
