@@ -283,7 +283,7 @@
   (fn [db & arg-pairs]
     ;;find by should always be specified
     (assert (= 0 (rem (count arg-pairs) 2)))
-    (assert (every? identity arg-pairs))
+    (assert (every? (comp not nil?) arg-pairs))
     (->>(d/q `{:find [~'?e]
                :where ~(where-clauses entity (partition-all 2 arg-pairs))}
              db)
