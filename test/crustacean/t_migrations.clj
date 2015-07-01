@@ -26,20 +26,6 @@
                                             :db/ident :name/field2}]
       (provided (db-functions entity3) => nil))))
 
-(fact "`migration->norms` generates a map of norms for a sequence of migrations"
-  (migrations->norms []) => nil
-  (migrations->norms [[..version.. ..entity..]]) => (ordered-map {:entity-..version.. {:txes [..initial-txes..]}})
-  (provided (initial-txes ..entity..) => ..initial-txes..
-            ..entity.. =contains=> {:name "entity"})
-
-  (migrations->norms [[..version.. ..entity..]
-                      [..version2.. ..entity2..]]) => (ordered-map {:entity-..version.. {:txes [..initial-txes..]}
-                                                                    :entity-..version2.. {:txes [..migration-txes..]}})
-  (provided (initial-txes ..entity..) => ..initial-txes..
-            (migration-txes ..entity.. ..entity2..) => ..migration-txes..
-            ..entity.. =contains=> {:name "entity"}
-            ..entity2.. =contains=> {:name "entity"}))
-
 (fact "`get-migrations` pulls migrations from a file"
   (get-migrations ..entity..) => ..migrations..
   (provided
