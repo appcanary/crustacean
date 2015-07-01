@@ -7,11 +7,13 @@
             [crustacean.core :refer [defentity]]
             [crustacean.core :refer :all]
             [crustacean.utils :refer [remove-nils]]
-            [crustacean.migrations :refer [sync-migrations]]))
+            [crustacean.migrations :refer [write-migrations sync-entity]]))
 
 
+(def migration-file "resources/testdata/entity.edn")
 ;; Create an entity to test with
 (defentity entity
+  (:migration-file "resources/testdata/entity.edn")
   (:fields [field1 :keyword :unique-value :assignment-required]
            [field2 :string :unique-identity :assignment-permitted]
            [field3 :boolean :indexed :assignment-permitted]
@@ -35,10 +37,15 @@
 (defn get-conn []
   (d/connect db-url))
 
+
+
 (defn reset-db! []
   (do (d/delete-database db-url)
       (d/create-database db-url)
-      (c/ensure-conforms (get-conn) (sync-migrations entity))))
+      (when (.exists (clojure.java.io/as-file migration-file))
+        (clojure.java.io/delete-file migration-file))
+      (write-migrations entity)
+      (sync-entity (get-conn) entity)))
 
 (fact "`field-spec->schema` converts a field spec to a prismatic schema"
   (field-spec->schema (get-in entity [:fields "field1"])) => `s/Keyword
@@ -117,7 +124,7 @@
 
 (facts "about `->malformed?"
   (fact "requires required keys"
-    ((->malformed? entity) {:field1 :hello-world :field2 "hello" :field7 [1]}) => falsey
+()    ((->malformed? entity) {:field1 :hello-world :field2 "hello" :field7 [1]}) => falsey
     ((->malformed? entity) {:field2 "hello"} ) => truthy)
 (fact "checks value type"
   ((->malformed? entity) {:field1 "not-keyword" :field2 "hello" :field7 [1 2]}) => truthy

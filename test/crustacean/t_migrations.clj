@@ -49,21 +49,23 @@
   (get-migrations ..no-migrations-file..) => (throws Exception))
 
 (fact "`write-migrations` writes  migrations to a file"
-  (let [migration-file (java.io.File/createTempFile "migrations" ".edn")
+  (let [migration-file "resources/testdata/migrations.edn"
         entity {:migration-file migration-file}]
-    (.delete migration-file) ;; to get rid of emtpty file
-    (do (write-migrations entity)
-        (slurp migration-file)) => "migrations"
-    (provided
-      (migration-txes entity) => "migrations")))
+    (when (.exists (clojure.java.io/as-file migration-file))
+      (clojure.java.io/delete-file migration-file)) ;; to get rid of emtpty file
+    (do (write-migrations entity) => nil
+      (provided
+        (initial-txes entity) => "migrations"))
+    (let [
+          [date {txes :txes}] (first (read-string (slurp migration-file)))]
+      txes => ["migrations"])))
 
 (facts "about `sync-entity`"
   (fact "it transacts an entity's norms to the database"
     (sync-entity ..conn.. ..entity..) => ..success..
     (provided
       (get-migrations ..entity..) => ..migrations..
-      (migrations->norms ..migrations..) => ..norms..
-      (c/ensure-conforms ..conn.. ..norms..) => ..success..))
+      (c/ensure-conforms ..conn.. ..migrations..) => ..success..))
   (fact "it throws if the entity has fields not in the migrations"
     (sync-entity ..conn.. ..entity..) => (throws Exception)
     (provided

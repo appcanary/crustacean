@@ -85,20 +85,6 @@
      (db-functions new-entity)
      (:extra-txes new-entity))))
 
-(defn migrations->norms
-  "Generate a map of norms from a vec of migrations -- pairs of version and entity"
-  [migrations]
-  (when (seq migrations)
-    (->>
-     (conj
-      ;; generate migration for each pair of entities (overlapping)
-      (for [[[old-k old-entity] [new-k new-entity]] (partition 2 1 migrations)]
-        [(keyword (str (:name new-entity) "-" new-k)) {:txes [(migration-txes old-entity new-entity)]}])
-      ;; generate migration for first entity
-      (let [[k entity] (first migrations)]
-        [(keyword (str (:name entity) "-" k)) {:txes [ (initial-txes entity)]}]))
-     (into (ordered-map)))))
-
 (defn get-migrations
   "Retrieve an entity's migrations"
   [entity]
@@ -111,19 +97,22 @@
   [entity]
   (if-let [file (:migration-file entity)]
     (if (.exists (clojure.java.io/as-file file))
-      (spit file (assoc (read-string (slurp file))
-                        (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
-                        (migration-txes entity)))
-      (spit file (ordered-map
-                  (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
-                  (migration-txes entity))))
+      (let [migrations (read-string(slurp file))
+            last-entity (:entity (last migrations))]
+        (spit file (pr-str (assoc migrations
+                                  (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
+                                  {:entity entity
+                                   :txes [(migration-txes last-entity entity)]}))))
+      (spit file (pr-str (ordered-map
+                          (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
+                          {:entity entity :txes [(initial-txes entity)]}))))
     (throw (Exception. "Migration has no file"))))
-
+    
 (defn sync-entity
   "Ensure that the database confirms to an entity's norms"
   [conn entity]
   (let [migrations (get-migrations entity)
-        [_ last-entity] (last migrations)]
+        [_ {last-entity :entity}] (last migrations)]
     (when-not (= (:fields last-entity) (:fields entity))
       (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (:name entity) "`"))))
-    (c/ensure-conforms conn (migrations->norms migrations))))
+    (c/ensure-conforms conn migrations)))
