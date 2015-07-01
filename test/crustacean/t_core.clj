@@ -124,7 +124,7 @@
 
 (facts "about `->malformed?"
   (fact "requires required keys"
-()    ((->malformed? entity) {:field1 :hello-world :field2 "hello" :field7 [1]}) => falsey
+    ((->malformed? entity) {:field1 :hello-world :field2 "hello" :field7 [1]}) => falsey
     ((->malformed? entity) {:field2 "hello"} ) => truthy)
 (fact "checks value type"
   ((->malformed? entity) {:field1 "not-keyword" :field2 "hello" :field7 [1 2]}) => truthy

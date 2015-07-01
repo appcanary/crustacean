@@ -100,7 +100,7 @@
                                                  (java.util.Date.)))]
     (if-let [file (:migration-file entity)]
       (if (.exists (clojure.java.io/as-file file))
-        (let [migrations (read-string(slurp file))
+        (let [migrations (read-string (slurp file))
               last-entity (:entity (last migrations))]
           (spit file (pr-str (assoc migrations
                                     key-str
@@ -108,8 +108,8 @@
                                      :txes [(migration-txes last-entity entity)]}))))
         (spit file (pr-str (ordered-map
                             key-str
-                            {:entity entity :txes [(initial-txes entity)]})))))
-    (throw (Exception. "Migration has no file"))))
+                            {:entity entity :txes [(initial-txes entity)]}))))
+      (throw (Exception. "Migration has no file")))))
 
 (defn sync-entity
   "Ensure that the database confirms to an entity's norms"
