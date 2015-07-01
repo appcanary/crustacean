@@ -100,14 +100,14 @@
       (let [migrations (read-string(slurp file))
             last-entity (:entity (last migrations))]
         (spit file (pr-str (assoc migrations
-                                  (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
+                                  (str (:name entity) "-" (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.)))
                                   {:entity entity
                                    :txes [(migration-txes last-entity entity)]}))))
       (spit file (pr-str (ordered-map
                           (.format (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") (java.util.Date.))
                           {:entity entity :txes [(initial-txes entity)]}))))
     (throw (Exception. "Migration has no file"))))
-    
+
 (defn sync-entity
   "Ensure that the database confirms to an entity's norms"
   [conn entity]
