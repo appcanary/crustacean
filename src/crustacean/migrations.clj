@@ -98,17 +98,16 @@
   (if-let [file (:migration-file entity)]
     (if (.exists (clojure.java.io/as-file file))
       (let [migrations (read-string(slurp file))
-            last-entity (:entity (last migrations))]
+            last-entity (:entity (last migrations))
+            key-str (str (:name entity) "-" (.format (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
+                                                       (.setTimeZone (java.util.TimeZone/getTimeZone "UTC")))
+                                                     (java.util.Date.)))]
         (spit file (pr-str (assoc migrations
-                                  (str (:name entity) "-" (.format (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
-                                                                     (.setTimeZone (java.util.TimeZone/getTimeZone "UTC")))
-                                                                   (java.util.Date.)))
+                                  key-str
                                   {:entity entity
                                    :txes [(migration-txes last-entity entity)]}))))
       (spit file (pr-str (ordered-map
-                          (str (:name entity) "-" (.format (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
-                                                             (.setTimeZone (java.util.TimeZone/getTimeZone "UTC")))
-                                                           (java.util.Date.)))
+                          key-str
                           {:entity entity :txes [(initial-txes entity)]}))))
     (throw (Exception. "Migration has no file"))))
 
