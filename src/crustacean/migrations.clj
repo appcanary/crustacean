@@ -92,6 +92,11 @@
     (read-string (slurp file))
     (throw (Exception. "Migration has no file"))))
 
+(defn write-entity
+  "The parts of an entity we want to save in migrations"
+  [entity]
+  (select-keys entity [:fields :name :basetype :namespace]))
+
 (defn write-migrations
   "Write an entity's migrations to its migration file"
   [entity]
@@ -104,11 +109,11 @@
               last-entity (:entity (last migrations))]
           (spit file (pr-str (assoc migrations
                                     key-str
-                                    {:entity entity
+                                    {:entity (write-entity entity)
                                      :txes [(migration-txes last-entity entity)]}))))
         (spit file (pr-str (ordered-map
                             key-str
-                            {:entity entity :txes [(initial-txes entity)]}))))
+                            {:entity (write-entity entity) :txes [(initial-txes entity)]}))))
       (throw (Exception. "Migration has no file")))))
 
 (defn sync-entity
