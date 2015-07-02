@@ -51,10 +51,10 @@
   (field-spec->schema (get-in entity [:fields "field1"])) => `s/Keyword
   (field-spec->schema (get-in entity [:fields "field2"])) => `s/Str
   (field-spec->schema (get-in entity [:fields "field3"])) => `s/Bool
-  (field-spec->schema (get-in entity [:fields "field4"])) => `(s/either s/Int [s/Int])
+  (field-spec->schema (get-in entity [:fields "field4"])) => `(s/either s/Int [s/Int] #{s/Int})
   (field-spec->schema (get-in entity [:fields "field5"])) => `Float
   (field-spec->schema (get-in entity [:fields "field6"])) => `java.lang.Double
-  (field-spec->schema (get-in entity [:fields "field7"])) => `(s/either (s/either s/Int {s/Keyword s/Any}) [(s/either s/Int {s/Keyword s/Any})])
+  (field-spec->schema (get-in entity [:fields "field7"])) => `(s/either (s/either s/Int {s/Keyword s/Any}) [(s/either s/Int {s/Keyword s/Any})] #{(s/either s/Int {s/Keyword s/Any})})
   (field-spec->schema (get-in entity [:fields "field8"])) => `s/Inst
   (field-spec->schema (get-in entity [:fields "field9"])) => `s/Uuid
   (field-spec->schema (get-in entity [:fields "field10"])) => `java.net.URI
