@@ -248,7 +248,6 @@
         create-fn (keyword (:namespace entity) "create")
         pull (->pull entity)]
     (fn [conn dirty-input]
-      (println "FUCK FUCK")
       (let [input (remove-nils dirty-input)]
         (s/validate input-schema input)
         (assert (not ((->exists? entity) (d/db conn) input)))
