@@ -76,6 +76,7 @@
          (def ~'create (->create ~entity))
          (def ~'find-by (->find-by ~entity))
          (def ~'pull (->pull ~entity))
+         (def ~'pull-many (->pull-many ~entity))
          (def ~'all-with (->all-with ~entity))
          (def ~'find-or-create (->find-or-create ~entity))
          ;; TODO these names suck
@@ -244,8 +245,10 @@
   "The `create!` function for a given entity"
   [entity]
   (let [input-schema (->input-schema entity)
-        create-fn (keyword (:namespace entity) "create")]
+        create-fn (keyword (:namespace entity) "create")
+        pull (->pull entity)]
     (fn [conn dirty-input]
+      (println "FUCK FUCK")
       (let [input (remove-nils dirty-input)]
         (s/validate input-schema input)
         (assert (not ((->exists? entity) (d/db conn) input)))
@@ -253,11 +256,7 @@
               {:keys [tempids db-after]} @(d/transact conn [[create-fn tempid input]
                                                             ])
               id (d/resolve-tempid db-after tempids tempid)]
-          (-> (d/pull db-after (if-let [view (get-in entity [:views :one])]
-                                 view
-                                 '[*]) id)
-            entity-exists?
-            normalize-keys))))))
+          (pull db-after id))))))
 
 ;; ## Entity Access
 (defn where-clauses
@@ -277,6 +276,31 @@
                  ) arg-pairs)))
 
 
+(defn ->pull
+  "The `pull` function for a given entity"
+  [{fields :fields ns :namespace :as entity}]
+  (fn [db entity-id]
+    (let [view (or (get-in entity [:views :one])
+                   #(select-keys % (conj (map (partial keyword ns) (keys fields)) :db/id )))]
+      (some->> (d/entity db entity-id)
+               entity-exists?
+               view
+               normalize-keys))))
+
+(defn ->pull-many
+  "The `pull-many` function for a given entity"
+  [{fields :fields ns :namespace :as entity}]
+  (fn [db entity-ids]
+    (let [view (or (get-in entity [:views :many])
+                   #(select-keys % (conj (map (partial keyword ns) (keys fields)) :db/id )))]
+      (some->> entity-ids
+               ;;TODO: this should be a transducer
+               (map (comp
+                     normalize-keys
+                     entity-exists?
+                     view
+                     (partial d/entity db)))))))
+
 (defn ->find-by
   "The `find-by` function for a given entity"
   [{fields :fields ns :namespace :as entity}]
@@ -284,26 +308,12 @@
     ;;find by should always be specified
     (assert (= 0 (rem (count arg-pairs) 2)))
     (assert (every? (comp not nil?) arg-pairs))
-    (->>(d/q `{:find [~'?e]
-               :where ~(where-clauses entity (partition-all 2 arg-pairs))}
-             db)
-        ffirst
-        (d/pull db (if-let [view (get-in entity [:views :one])]
-                     view
-                     '[*]))
-        entity-exists?
-        normalize-keys)))
-
-(defn ->pull
-  "The `pull` function for a given entity"
-  [{fields :fields ns :namespace :as entity}]
-  (fn [db entity-id]
-    (->> entity-id
-         (d/pull db (if-let [view (get-in entity [:views :one])]
-                      view
-                      '[*]) )
-         entity-exists?
-         normalize-keys)))
+    (let [pull (->pull entity)]
+      (->> (d/q `{:find [~'?e]
+                  :where ~(where-clauses entity (partition-all 2 arg-pairs))}
+                db)
+           ffirst
+           (pull db)))))
 
 (defn ->all-with
   "The `all-with` function for a given entity"
@@ -311,13 +321,11 @@
   (let [fields (:fields entity)
         field?  (set (keys fields))]
     (fn [db & arg-pairs]
-      (->> (d/q `{:find [[~'?e ...]]
-                  :where ~(where-clauses entity (partition-all 2 arg-pairs))}
-                db)
-           (map (partial d/pull db (if-let [view (get-in entity [:views :many])]
-                                     view
-                                     '[*])))
-           (map normalize-keys)))))
+      (let [pull-many (->pull-many entity)]
+        (->> (d/q `{:find [[~'?e ...]]
+                    :where ~(where-clauses entity (partition-all 2 arg-pairs))}
+                  db)
+             (pull-many db))))))
 
 ;; TODO: this should be atomic
 (defn ->find-or-create
