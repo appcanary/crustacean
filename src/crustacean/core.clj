@@ -264,7 +264,7 @@
   "Generate where clauses for based on a list of attribute values or attributes"
   [entity arg-pairs]
   (vec (mapcat (fn [arg-pair]
-                 (if (and (= 2 (count arg-pair)) (second arg-pair))
+                 (if (and (= 2 (count arg-pair)) (not (nil? (second arg-pair))))
                    (let [[attr value] arg-pair
                          sym (gensym "?")]
                      (if (re-find #"^_" (name attr))
