@@ -18,47 +18,47 @@
   "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defentity`"
   [nm forms]
   (-> (reduce (fn [a [k & values]]
-                 (case k
-                   :migration-file
-                   (assoc a :migration-file (first values))
+                (case k
+                  :migration-file
+                  (assoc a :migration-file (first values))
 
-                   :migration-version
-                   (assoc a :migration-version (first values))
+                  :migration-version
+                  (assoc a :migration-version (first values))
 
-                   :fields
-                   (assoc a :fields 
-                          (reduce (fn [a [nm tp & opts]]
-                                    (assoc a (name nm) [tp (set opts)])) {} values))
-                   :defaults
-                   (assoc a :defaults
-                          (reduce (fn [a [nm default]]
-                                    (assoc a (name nm) (if (list? default)
-                                                         `(quote ~default)
-                                                         default))) {} values))
-                   :validators
-                   (assoc a :validators
-                          (reduce (fn [a [nm validator]]
-                                    (assoc a (name nm) (if (list? validator)
-                                                         `(quote ~validator)
-                                                         validator))) {} values))
+                  :fields
+                  (assoc a :fields 
+                         (reduce (fn [a [nm tp & opts]]
+                                   (assoc a (name nm) [tp (set opts)])) {} values))
+                  :defaults
+                  (assoc a :defaults
+                         (reduce (fn [a [nm default]]
+                                   (assoc a (name nm) (if (list? default)
+                                                        `(quote ~default)
+                                                        default))) {} values))
+                  :validators
+                  (assoc a :validators
+                         (reduce (fn [a [nm validator]]
+                                   (assoc a (name nm) (if (list? validator)
+                                                        `(quote ~validator)
+                                                        validator))) {} values))
 
-                   :composite-keys
-                   (assoc a :composite-keys
-                          (mapv #(mapv keyword %) values))
+                  :composite-keys
+                  (assoc a :composite-keys
+                         (mapv #(mapv keyword %) values))
 
-                   :views
-                   (assoc a :views (apply hash-map values))
+                  :views
+                  (assoc a :views (apply hash-map values))
 
-                   :backrefs
-                   (assoc a :backrefs
-                          (reduce (fn [a [nm opt]]
-                                    (assoc a (keyword nm) opt)) {} values))
+                  :backrefs
+                  (assoc a :backrefs
+                         (reduce (fn [a [nm opt]]
+                                   (assoc a (keyword nm) opt)) {} values))
 
-                   :extra-txes
-                   (assoc a :extra-txes (first values))))
+                  :extra-txes
+                  (assoc a :extra-txes (first values))))
 
-               {}
-               forms)
+              {}
+              forms)
       (assoc :name (name nm)
              :basetype (keyword nm)
              :namespace (name nm))))
@@ -104,17 +104,17 @@
                  :enum  `s/Any ;todo improve (apply s/enum (first (filter vector? opts)))
                  )]
     (if (contains? opts :many)
-      `(s/either ~schema ~(vector schema))
+      `(s/either ~schema ~(vector schema) ~(set (vector schema)))
       schema)))
 
 
 (defn ->input-schema*
   "The syntactic representation of a prismatic schema for an input, generated from a given entity.
-   We return don't evaluate, and return syntax here because these
-   schemas are going to be inserted into datomic database functions,
-   which are stored as unevaluated forms.
+  We return don't evaluate, and return syntax here because these
+  schemas are going to be inserted into datomic database functions,
+  which are stored as unevaluated forms.
 
-   To generate an actual schema, see `->input-schema`"
+  To generate an actual schema, see `->input-schema`"
   [entity]
   (let [assignment-required (fields-with entity :assignment-required)
         assignment-permitted (fields-with entity :assignment-permitted)]
