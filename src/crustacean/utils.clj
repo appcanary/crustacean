@@ -17,7 +17,7 @@
   (if (map? mp)
     (reduce
      (fn [m [k v]]
-       (if (coll? v)
+       (if (or (seq? v) (set? v))
          (assoc m (normalize k) (mapv normalize-keys v))
          (assoc m (normalize k) (normalize-keys v))))
      {} mp)
