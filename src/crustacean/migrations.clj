@@ -88,7 +88,7 @@
   [entity]
   (if-let [file (:migration-file entity)]
     (read-string (slurp file))
-    (throw (Exception. "Migration has no file"))))
+    (throw (Exception. (str "Migration has no file:" (:name entity)))))
 
 (defn write-entity
   "The parts of an entity we want to save in migrations"
@@ -112,7 +112,7 @@
         (spit file (pr-str (ordered-map
                             key-str
                             {:entity (write-entity entity) :txes [(initial-txes entity)]}))))
-      (throw (Exception. "Migration has no file")))))
+      (throw (Exception. (str "Migration has no file:" (:name entity)))))))
 
 (defn sync-entity
   "Ensure that the database confirms to an entity's norms"
