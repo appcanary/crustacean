@@ -10,9 +10,7 @@
             [io.rkn.conformity :as c]
 
             [crustacean.schemas :refer [Entity]]
-            [crustacean.core :refer [->malformed?* ->exists?* ->create*]]
-
-            [midje.sweet :refer :all]))
+            [crustacean.core :refer [->malformed?* ->exists?* ->create*]]))
 
 
 (defn tx-markers
