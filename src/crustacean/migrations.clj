@@ -88,7 +88,7 @@
   [entity]
   (if-let [file (:migration-file entity)]
     (read-string (slurp file))
-    (throw (Exception. (str "Migration has no file:" (:name entity)))))
+    (throw (Exception. (str "Migration has no file:" (:name entity))))))
 
 (defn write-entity
   "The parts of an entity we want to save in migrations"
