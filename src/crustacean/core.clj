@@ -188,7 +188,7 @@
                                                    (keyword ~(:namespace entity) (name b#)) (get input# b#)])))]
              (seq (concat
                    (d/q {:find '[[~'?e ...]] :in '[~'$ [[~'?attr ~'?value]]] :where '[[~'?e ~'?attr ~'?value]]} db# unique-key-pairs#)
-                   (d/q {:find '[[~'?e ...]] :in '[~'$ [[~'?attr1 ~'?value1 ~'?attr2 ~'value2]]] :where '[[~'?e ~'?attr1 ~'?value1] [~'?e ~'?attr2 ~'?value2]]} db# composite-key-pairs#))))}))
+                   (d/q {:find '[[~'?e ...]] :in '[~'$ [[~'?attr1 ~'?value1 ~'?attr2 ~'?value2]]] :where '[[~'?e ~'?attr1 ~'?value1] [~'?e ~'?attr2 ~'?value2]]} db# composite-key-pairs#))))}))
 
 (defn ->exists?
   "The `exits?` function for a given entity"
