@@ -165,10 +165,6 @@
      :code (let [checker#  (schema.core/checker (eval ~(->input-schema* entity)))]
              (checker# input#))}))
 
-(defn ->malformed?
-  "The `malformed?` function for a given entity"
-  [entity]
-  (s/checker (->input-schema entity)))
 
 (defn ->malformed?
   "The `malformed?` function for a given entity"
