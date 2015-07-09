@@ -115,11 +115,11 @@
       (throw (Exception. (str "Migration has no file:" (:name entity)))))))
 
 ;; This is a macro so we can resolve the namespace
-(defmacro sync-entity
+(defn sync-entity
   "Ensure that the database confirms to an entity's norms"
   [conn entity]
-  `(let [migrations# (get-migrations ~entity)
-        [_ {last-entity# :entity}] (last migrations#)]
-    (when-not (= (:fields last-entity#) (:fields ~entity))
-      (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (str ~(.ns (resolve entity)) "/" (:name ~entity)) "`"))))
-    (c/ensure-conforms ~conn migrations#)))
+  (let [migrations (get-migrations entity)
+        [_ {last-entity :entity}] (last migrations)]
+    (when-not (= (:fields last-entity) (:fields entity))
+      (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (:name entity) "`"))))
+    (c/ensure-conforms conn migrations)))
