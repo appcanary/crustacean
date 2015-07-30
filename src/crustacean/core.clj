@@ -248,6 +248,7 @@
     (fn [conn dirty-input]
       (let [input (remove-nils dirty-input)]
         (s/validate input-schema input)
+        (println "HI")
         (assert (not ((->exists? entity) (d/db conn) input)))
         (let [tempid (d/tempid :db.part/user -1)
               {:keys [tempids db-after]} @(d/transact conn [[create-fn tempid input]
@@ -279,10 +280,15 @@
   (fn [db entity-id]
     (let [view (or (get-in entity [:views :one])
                    #(select-keys % (conj (map (partial keyword ns) (keys fields)) :db/id )))]
-      (some->> (d/entity db entity-id)
-               entity-exists?
-               view
-               normalize-keys))))
+
+      ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
+      (if (vector? view)
+        (normalize-keys (d/pull db view entity-id))
+
+        (some->> (d/entity db entity-id)
+                 entity-exists?
+                 view
+                 normalize-keys)))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
@@ -290,13 +296,17 @@
   (fn [db entity-ids]
     (let [view (or (get-in entity [:views :many])
                    #(select-keys % (conj (map (partial keyword ns) (keys fields)) :db/id )))]
-      (some->> entity-ids
-               ;;TODO: this should be a transducer
-               (map (comp
-                     normalize-keys
-                     entity-exists?
-                     view
-                     (partial d/entity db)))))))
+      ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
+      (if (vector? view)
+        (map normalize-keys (d/pull-many db view entity-ids))
+
+        (some->> entity-ids
+                 ;;TODO: this should be a transducer
+                 (map (comp
+                       normalize-keys
+                       entity-exists?
+                       view
+                       (partial d/entity db))))))))
 
 (defn ->find-by
   "The `find-by` function for a given entity"
