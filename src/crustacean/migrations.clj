@@ -86,7 +86,7 @@
 (defn get-migrations
   "Retrieve an entity's migrations"
   [entity]
-  (if-let [file (:migration-file entity)]
+  (if-let [file (-> entity :migration-file clojure.java.io/resource)]
     (read-string (slurp file))
     (throw (Exception. (str "Migration has no file:" (:name entity))))))
 
@@ -101,18 +101,18 @@
   (let [key-str (str (:name entity) "-" (.format (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
                                                    (.setTimeZone (java.util.TimeZone/getTimeZone "UTC")))
                                                  (java.util.Date.)))]
-    (if-let [file (:migration-file entity)]
-      (if (.exists (clojure.java.io/as-file file))
+    (if-let [file-path (:migration-file entity)]
+      (if-let [file (clojure.java.io/resource file-path)]
         (let [migrations (read-string (slurp file))
               last-entity (:entity (last migrations))]
           (spit file (pr-str (assoc migrations
                                     key-str
                                     {:entity (write-entity entity)
                                      :txes [(migration-txes last-entity entity)]}))))
-        (spit file (pr-str (ordered-map
-                            key-str
-                            {:entity (write-entity entity) :txes [(initial-txes entity)]}))))
-      (throw (Exception. (str "Migration has no file:" (:name entity)))))))
+        (spit (str "resources/" file-path) (pr-str (ordered-map
+                             key-str
+                             {:entity (write-entity entity) :txes [(initial-txes entity)]}))))
+      (throw (Exception. (str "Migration has no file asdf sadf sadf :" (:name entity)))))))
 
 ;; This is a macro so we can resolve the namespace
 (defn sync-entity

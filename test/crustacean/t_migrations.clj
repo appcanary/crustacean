@@ -30,20 +30,20 @@
   (get-migrations ..entity..) => ..migrations..
   (provided
     ..entity.. =contains=> {:migration-file ..somefile..}
-    (read-string (slurp ..somefile..)) => ..migrations..)
+    (clojure.java.io/resource ..somefile..) => ..some-resource..
+    (read-string (slurp ..some-resource..)) => ..migrations..)
 
   (get-migrations ..no-migrations-file..) => (throws Exception))
 
 (fact "`write-migrations` writes  migrations to a file"
-  (let [migration-file "resources/testdata/migrations.edn"
+  (let [migration-file "testdata/migrations.edn"
         entity {:migration-file migration-file}]
-    (when (.exists (clojure.java.io/as-file migration-file))
-      (clojure.java.io/delete-file migration-file)) ;; to get rid of emtpty file
+    (when (clojure.java.io/resource migration-file)
+      (clojure.java.io/delete-file (str "resources/" migration-file))) ;; to get rid of emtpty file
     (do (write-migrations entity) => nil
       (provided
         (initial-txes entity) => "migrations"))
-    (let [
-          [date {txes :txes}] (first (read-string (slurp migration-file)))]
+    (let [[date {txes :txes}] (first (read-string (slurp (clojure.java.io/resource migration-file))))]
       txes => ["migrations"])))
 
 (facts "about `sync-entity`"

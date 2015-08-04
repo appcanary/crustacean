@@ -10,10 +10,10 @@
             [crustacean.migrations :refer [write-migrations sync-entity]]))
 
 
-(def migration-file "resources/testdata/entity.edn")
+(def migration-file "testdata/entity.edn")
 ;; Create an entity to test with
 (defentity entity
-  (:migration-file "resources/testdata/entity.edn")
+  (:migration-file "testdata/entity.edn")
   (:fields [field1 :keyword :unique-value :assignment-required]
            [field2 :string :unique-identity :assignment-permitted]
            [field3 :boolean :indexed :assignment-permitted]
@@ -42,8 +42,8 @@
 (defn reset-db! []
   (do (d/delete-database db-url)
       (d/create-database db-url)
-      (when (.exists (clojure.java.io/as-file migration-file))
-        (clojure.java.io/delete-file migration-file))
+      (when (clojure.java.io/resource migration-file)
+        (clojure.java.io/delete-file (str "resources/" migration-file)))
       (write-migrations entity)
       (sync-entity (get-conn) entity)))
 
