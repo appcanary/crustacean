@@ -10,6 +10,7 @@
             [io.rkn.conformity :as c]
 
             [crustacean.schemas :refer [Entity]]
+            [crustacean.utils :refer [spit-edn]]
             [crustacean.core :refer [->malformed?* ->exists?* ->create*]]))
 
 
@@ -105,13 +106,13 @@
       (if-let [file (clojure.java.io/resource file-path)]
         (let [migrations (read-string (slurp file))
               last-entity (:entity (last migrations))]
-          (spit file (pr-str (assoc migrations
-                                    key-str
-                                    {:entity (write-entity entity)
-                                     :txes [(migration-txes last-entity entity)]}))))
-        (spit (str "resources/" file-path) (pr-str (ordered-map
-                             key-str
-                             {:entity (write-entity entity) :txes [(initial-txes entity)]}))))
+          (spit-edn (str "resources/" file-path) (assoc migrations
+                                                        key-str
+                                                        {:entity (write-entity entity)
+                                                         :txes [(migration-txes last-entity entity)]})))
+        (spit-edn (str "resources/" file-path) (ordered-map
+                                                 key-str
+                                                 {:entity (write-entity entity) :txes [(initial-txes entity)]})))
       (throw (Exception. (str "Migration has no file asdf sadf sadf :" (:name entity)))))))
 
 ;; This is a macro so we can resolve the namespace

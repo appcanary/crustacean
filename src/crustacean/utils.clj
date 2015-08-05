@@ -37,7 +37,15 @@
        (map first)))
 
 (defn unique-fields
-  "Returns the name of fields set to unique "
+  "Returns the name of fields set to unique"
   [entity]
   (concat (fields-with entity :unique-value)
           (fields-with entity :unique-identity)))
+
+(defn spit-edn
+  "Writes a form to file regardless of its size"
+  [filepath data]
+  (with-open [w (clojure.java.io/writer filepath)]
+    (binding [*print-length* false
+              *out* w]
+      (pr data))))

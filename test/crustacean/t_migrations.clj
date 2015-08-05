@@ -39,12 +39,12 @@
   (let [migration-file "testdata/migrations.edn"
         entity {:migration-file migration-file}]
     (when (clojure.java.io/resource migration-file)
-      (clojure.java.io/delete-file (str "resources/" migration-file))) ;; to get rid of emtpty file
-    (do (write-migrations entity) => nil
-      (provided
-        (initial-txes entity) => "migrations"))
-    (let [[date {txes :txes}] (first (read-string (slurp (clojure.java.io/resource migration-file))))]
-      txes => ["migrations"])))
+      (clojure.java.io/delete-file (str "resources/" migration-file));; to get rid of emtpty file
+      (do (write-migrations entity) => nil
+          (provided
+            (initial-txes entity) => "migrations"))
+      (let [[date {txes :txes}] (first (read-string (slurp (clojure.java.io/resource migration-file))))]
+        (txes => ["migrations"])))))
 
 (facts "about `sync-entity`"
   (fact "it transacts an entity's norms to the database"
