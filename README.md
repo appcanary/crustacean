@@ -1,6 +1,6 @@
 # Crustacean
 <img src="https://raw.githubusercontent.com/appcanary/crustacean/master/logo.png"
- alt="Crustacean logo" align="right" height="400px"/>
+ alt="Crustacean logo" align="right" height="300px"/>
 > The point is that lobsters are basically giant sea-insects. Like most arthropods, they date from the Jurassic period, biologically so much older than mammalia that they might as well be from another planet. And they are—particularly in their natural brown-green state, brandishing their claws like weapons and with thick antennae awhip—not nice to look at. And it’s true that they are garbagemen of the sea, eaters of dead stuff, although they’ll also eat some live shellfish, certain kinds of injured fish, and sometimes each other.
 
 > - From [Consider the Lobster](http://www.gourmet.com/magazine/2000s/2004/08/consider_the_lobster) by David Foster Wallace
