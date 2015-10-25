@@ -148,8 +148,7 @@
 (defn ->output-schema
   "The output schema for a given entity"
   [entity]
-  (-> (into {:id Long
-             s/Keyword s/Any}
+  (-> (into {:id Long}
             (for [[field spec] (:fields entity)]
               [(s/optional-key (keyword field)) (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec)))]))
 
