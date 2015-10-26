@@ -29,6 +29,12 @@
                   (assoc a :fields 
                          (reduce (fn [a [nm tp & opts]]
                                    (assoc a (name nm) [tp (set opts)])) {} values))
+
+                  :computed-fields
+                  (assoc a :computed-fields
+                         (reduce (fn [a [nm computed-field]]
+                                   (assoc a (name nm) computed-field)) {} values))
+
                   :defaults
                   (assoc a :defaults
                          (reduce (fn [a [nm default]]
@@ -149,8 +155,14 @@
   "The output schema for a given entity"
   [entity]
   (-> (into {:id Long}
-            (for [[field spec] (:fields entity)]
-              [(s/optional-key (keyword field)) (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec)))]))
+            (concat
+             (for [[field spec] (:fields entity)]
+               [(s/optional-key (keyword field)) (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec)))])
+             (for [[field func & [field-type]] (:computed-fields entity)]
+               [(keyword field) (if field-type field-type s/Any)])
+             (for [[field] (:backrefs entity)]
+               [(s/optional-key (keyword (namespace field))) s/Any])
+             ))
 
       (s/schema-with-name (str (capitalize (:name entity)) "Out"))))
 
@@ -272,17 +284,33 @@
                    `[[~'?e ~(keyword (:namespace entity) (name (first arg-pair)))]])
                  ) arg-pairs)))
 
+(defn pull-expression
+  "Generate a pull expression for a model"
+  [{fields :fields backrefs :backrefs ns :namespace :as model}]
+  (into
+   (conj (mapv (partial keyword ns) (keys fields)) :db/id)
+   (vec (for [br (keys backrefs)] {br '[*]}))))
+
+(defn compute-computed-fields
+  "Fills in the computed fields of a model given the serialized map"
+  [db {:keys [computed-fields] :as model} serialized-map]
+  (when serialized-map
+    (reduce
+     (fn [entity [field-name func]]
+       (assoc entity (keyword field-name) (func db entity)))
+     serialized-map
+     computed-fields)))
 
 (defn ->pull
   "The `pull` function for a given entity"
-  [{fields :fields ns :namespace :as entity}]
+  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
   (fn [db entity-id]
     (let [view (or (get-in entity [:views :one])
-                   #(select-keys % (conj (map (partial keyword ns) (keys fields)) :db/id )))]
+                   (pull-expression entity))]
 
       ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
       (if (vector? view)
-        (normalize-keys (d/pull db view entity-id))
+        (compute-computed-fields db entity (normalize-keys (entity-exists? (d/pull db view entity-id))))
 
         (some->> (d/entity db entity-id)
                  entity-exists?
@@ -291,13 +319,13 @@
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
-  [{fields :fields ns :namespace :as entity}]
+  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
   (fn [db entity-ids]
     (let [view (or (get-in entity [:views :many])
-                   #(select-keys % (conj (map (partial keyword ns) (keys fields)) :db/id )))]
+                   (pull-expression entity))]
       ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
       (if (vector? view)
-        (map normalize-keys (d/pull-many db view entity-ids))
+        (map #(compute-computed-fields db entity (normalize-keys (entity-exists? %))) (d/pull-many db view entity-ids))
 
         (some->> entity-ids
                  ;;TODO: this should be a transducer
