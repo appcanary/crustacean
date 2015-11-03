@@ -12,9 +12,20 @@
     (keyword (namespace k))
     (keyword (name k))))
 
+(defn entity-map
+  "If it's a Datomic entity map make sure we get the :db/id key
+
+  Datomic doesn't include this in (keys entity) for the entity API for some reason"
+  [x]
+  (cond (map? x)
+        x
+
+        (instance? datomic.query.EntityMap x)
+        (select-keys x (conj (keys x) :db/id))))
+
 (defn normalize-keys
   [mp]
-  (if (map? mp)
+  (if-let [mp (entity-map mp)]
     (reduce
      (fn [m [k v]]
        (if (or (sequential? v) (set? v))
