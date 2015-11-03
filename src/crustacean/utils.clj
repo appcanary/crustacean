@@ -40,18 +40,18 @@
   (into {} (remove #(nil? (second %)) input-map)))
 
 (defn fields-with
-  "Returns names of fields in an entity with given option set"
-  [entity attr]
-  (->> (:fields entity)
+  "Returns names of fields in an model with given option set"
+  [model attr]
+  (->> (:fields model)
        (filter (fn [[field [type opts]]]
                  (opts attr)))
        (map first)))
 
 (defn unique-fields
   "Returns the name of fields set to unique"
-  [entity]
-  (concat (fields-with entity :unique-value)
-          (fields-with entity :unique-identity)))
+  [model]
+  (concat (fields-with model :unique-value)
+          (fields-with model :unique-identity)))
 
 (defn spit-edn
   "Writes a form to file regardless of its size"
