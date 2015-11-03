@@ -26,9 +26,11 @@
                   (assoc a :migration-version (first values))
 
                   :fields
-                  (assoc a :fields 
+                  (assoc a :fields
                          (reduce (fn [a [nm tp & opts]]
-                                   (assoc a (name nm) [tp (set opts)])) {} values))
+                                   (if (vector? tp)
+                                     (assoc a (name nm) [(first tp) (set opts) (str (second tp))])
+                                     (assoc a (name nm) [tp (set opts)]))) {} values))
 
                   :computed-fields
                   (assoc a :computed-fields
@@ -284,18 +286,37 @@
 (defn default-view
   [{fields :fields backrefs :backrefs computed-fields :computed-fields ns :namespace :as model}]
   (fn [entity]
-    (let [db (d/entity-db entity)
-          field-keys (concat
-                      [:db/id]
-                      (map #(keyword ns (first %)) fields))
-          entity (select-keys entity field-keys)]
-      (when (entity-exists? entity)
+    ;; so we don't add computed fields to nil
+    (when entity
+      (let [db (d/entity-db entity)
+            field-keys (map #(keyword ns (first %)) fields)
+            entity (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+                             (let [qualified-field (keyword ns field-name)
+                                   field-key (keyword field-name)
+                                   field-value (qualified-field entity)]
+                               (if (= :ref field-type)
+                                 ;; if we have a model, use its view
+                                 (if ref-model
+                                   (let [view (default-view (eval (symbol ref-model)))]
+                                     (if (contains? field-opts :many)
+                                       (assoc acc field-key (mapv view field-value))
+                                       (assoc acc field-key (view field-value))))
+                                   ;; else we need to grab the entity
+                                   (if (contains? field-opts :many)
+                                     (assoc acc field-key (mapv normalize-keys field-value))
+                                     (assoc acc field-key (normalize-keys field-value))))
+
+                                 ;; if it's not a ref act normally
+                                 (if field-value
+                                   (assoc acc field-key field-value)
+                                   acc))))
+                           {:id (:db/id entity)}
+                           fields)]
         (reduce
          (fn [entity [field-name func]]
            (assoc entity (keyword field-name) (func db entity)))
-         (normalize-keys entity)
-         computed-fields))
-      )))
+         entity
+         computed-fields)))))
 
 (defn ->pull
   "The `pull` function for a given entity"
