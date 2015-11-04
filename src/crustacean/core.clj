@@ -290,7 +290,7 @@
     (when entity
       (let [db (d/entity-db entity)
             field-keys (map #(keyword ns (first %)) fields)
-            entity (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+            result (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
                              (let [qualified-field (keyword ns field-name)
                                    field-key (keyword field-name)
                                    field-value (qualified-field entity)]
@@ -301,10 +301,8 @@
                                      (if (contains? field-opts :many)
                                        (assoc acc field-key (mapv view field-value))
                                        (assoc acc field-key (view field-value))))
-                                   ;; else we need to grab the entity
-                                   (if (contains? field-opts :many)
-                                     (assoc acc field-key (mapv normalize-keys field-value))
-                                     (assoc acc field-key (normalize-keys field-value))))
+                                   ;; else we don't include it
+                                   acc)
 
                                  ;; if it's not a ref act normally
                                  (if field-value
@@ -313,9 +311,9 @@
                            {:id (:db/id entity)}
                            fields)]
         (reduce
-         (fn [entity [field-name func]]
-           (assoc entity (keyword field-name) (func db entity)))
-         entity
+         (fn [result [field-name func]]
+           (assoc result (keyword field-name) (func entity)))
+         result
          computed-fields)))))
 
 (defn ->pull
