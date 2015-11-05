@@ -97,7 +97,7 @@
   [[type opts] ]
   (let [schema (case type
                  :keyword `s/Keyword
-                 :string `s/Str
+                 :string `(s/maybe s/Str)
                  :boolean `s/Bool
                  :long `s/Int
                  :bigint `s/Int
@@ -305,9 +305,7 @@
                                    acc)
 
                                  ;; if it's not a ref act normally
-                                 (if field-value
-                                   (assoc acc field-key field-value)
-                                   acc))))
+                                 (assoc acc field-key field-value))))
                            {:id (:db/id entity)}
                            fields)]
         (reduce
