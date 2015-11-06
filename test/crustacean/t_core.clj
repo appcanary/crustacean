@@ -49,7 +49,7 @@
 
 (fact "`field-spec->schema` converts a field spec to a prismatic schema"
   (field-spec->schema (get-in entity [:fields "field1"])) => `s/Keyword
-  (field-spec->schema (get-in entity [:fields "field2"])) => `s/Str
+  (field-spec->schema (get-in entity [:fields "field2"])) => `(s/maybe s/Str)
   (field-spec->schema (get-in entity [:fields "field3"])) => `s/Bool
   (field-spec->schema (get-in entity [:fields "field4"])) => `(s/either s/Int [s/Int] #{s/Int})
   (field-spec->schema (get-in entity [:fields "field5"])) => `Float
@@ -102,11 +102,11 @@
     
     (->input-schema* empty) => {}
     (->input-schema* unsettable-fields) => {}
-    (->input-schema* permitted-fields) => `{(s/optional-key :..field..) s/Str}
-    (->input-schema* required-fields) => `{:..field.. s/Str}
-    (->input-schema* validators) => `{:..field.. (s/both s/Str ..regex..)
-                                      :..field2.. (s/both s/Str (s/pred ~''(quote (fn [] "function"))))}
-    (->input-schema* backrefs) => `{:..field.. s/Str
+    (->input-schema* permitted-fields) => `{(s/optional-key :..field..) (s/maybe s/Str)}
+    (->input-schema* required-fields) => `{:..field.. (s/maybe s/Str)}
+    (->input-schema* validators) => `{:..field.. (s/both (s/maybe s/Str) ..regex..)
+                                      :..field2.. (s/both (s/maybe s/Str) (s/pred ~''(quote (fn [] "function"))))}
+    (->input-schema* backrefs) => `{:..field.. (s/maybe s/Str)
                                     :back/ref (s/either s/Int {s/Keyword s/Any})
                                     (s/optional-key :back/ref2) (s/either s/Int {s/Keyword s/Any})}))
 
@@ -116,8 +116,7 @@
                                                [..field2.. :ref])
                                      ])]
     (->output-schema entity) => (s/schema-with-name {:id Long
-                                                     s/Keyword s/Any
-                                                     (s/optional-key :..field..) s/Str
+                                                     (s/optional-key :..field..) (s/maybe s/Str)
                                                      (s/optional-key :..field2..) s/Any} "EntityOut")))
 
 (future-fact "`about ->malformed?*`")
@@ -137,8 +136,8 @@
   (against-background [(before :facts (reset-db!))]
     (fact "input field with non-nil value should be set"
       ((->create entity) (get-conn) {:field1 :alongkeyword :field2 "hello"}) => (contains {:field2 "hello"}))
-    (fact "input field with nil value should NOT be set"
-      ((->create entity) (get-conn) {:field1 :alongkeyword :field2 nil}) =not=> (contains {:field2 anything}))
+    (fact "input field with nil value should be set"
+      ((->create entity) (get-conn) {:field1 :alongkeyword :field2 nil}) => (contains {:field2 nil}))
     (fact "input field with false boolean value should be set to false " ; field3 defaults to true
       ((->create entity) (get-conn) {:field1 :alongkeyword :field3 false}) => (contains {:field3 anything}))))
 
