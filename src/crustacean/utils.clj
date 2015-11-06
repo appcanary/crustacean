@@ -12,9 +12,20 @@
     (keyword (namespace k))
     (keyword (name k))))
 
+(defn entity-map
+  "If it's a Datomic entity map make sure we get the :db/id key
+
+  Datomic doesn't include this in (keys entity) for the entity API for some reason"
+  [x]
+  (cond (map? x)
+        x
+
+        (instance? datomic.query.EntityMap x)
+        (select-keys x (conj (keys x) :db/id))))
+
 (defn normalize-keys
   [mp]
-  (if (map? mp)
+  (if-let [mp (entity-map mp)]
     (reduce
      (fn [m [k v]]
        (if (or (sequential? v) (set? v))
@@ -29,18 +40,18 @@
   (into {} (remove #(nil? (second %)) input-map)))
 
 (defn fields-with
-  "Returns names of fields in an entity with given option set"
-  [entity attr]
-  (->> (:fields entity)
+  "Returns names of fields in an model with given option set"
+  [model attr]
+  (->> (:fields model)
        (filter (fn [[field [type opts]]]
                  (opts attr)))
        (map first)))
 
 (defn unique-fields
   "Returns the name of fields set to unique"
-  [entity]
-  (concat (fields-with entity :unique-value)
-          (fields-with entity :unique-identity)))
+  [model]
+  (concat (fields-with model :unique-value)
+          (fields-with model :unique-identity)))
 
 (defn spit-edn
   "Writes a form to file regardless of its size"
