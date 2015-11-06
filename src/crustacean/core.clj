@@ -97,7 +97,7 @@
   [[type opts] ]
   (let [schema (case type
                  :keyword `s/Keyword
-                 :string `(s/maybe s/Str)
+                 :string `s/Str
                  :boolean `s/Bool
                  :long `s/Int
                  :bigint `s/Int
@@ -159,7 +159,7 @@
   (-> (into {:id Long}
             (concat
              (for [[field spec] (:fields entity)]
-               [(s/optional-key (keyword field)) (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec)))])
+               [(s/optional-key (keyword field)) (s/maybe (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec))))])
              (for [[field func & [field-type]] (:computed-fields entity)]
                [(keyword field) (if field-type field-type s/Any)])))
 
