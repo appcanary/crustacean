@@ -1,6 +1,8 @@
 (ns crustacean.core
   "This generates CRU functions complete with input validation"
   (:require [schema.core :as s]
+            [plumbing.core :refer [fnk]]
+            [plumbing.graph :as graph]
             [datomic.api :as d]
             [clojure.string :refer [capitalize]]
 
@@ -285,69 +287,69 @@
 
 (defn default-view
   [{fields :fields backrefs :backrefs computed-fields :computed-fields ns :namespace :as model}]
-  (fn [entity]
-    ;; so we don't add computed fields to nil
-    (when entity
-      (let [db (d/entity-db entity)
-            field-keys (map #(keyword ns (first %)) fields)
-            result (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
-                             (let [qualified-field (keyword ns field-name)
-                                   field-key (keyword field-name)
-                                   field-value (qualified-field entity)]
-                               (if (= :ref field-type)
-                                 ;; if we have a model, use its view
-                                 (if ref-model
-                                   (let [view (default-view (eval (symbol ref-model)))]
-                                     (if (contains? field-opts :many)
-                                       (assoc acc field-key (mapv view field-value))
-                                       (assoc acc field-key (view field-value))))
-                                   ;; else we don't include it
-                                   acc)
+  (let [somefn (graph/compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+                                        (let [qualified-field (keyword ns field-name)
+                                              field-key (keyword field-name)]
+                                          (if (= :ref field-type)
+                                            ;; if we have a model, use its view
+                                            (if ref-model
+                                              (let [view (default-view (eval (symbol ref-model)))]
+                                                (if (contains? field-opts :many)
+                                                  (assoc acc field-key (fnk [e] (mapv view (qualified-field e))))
+                                                  (assoc acc field-key (fnk [e] (view (qualified-field e))))))
+                                              ;; else we don't include it
+                                              acc)
 
-                                 ;; if it's not a ref act normally
-                                 (assoc acc field-key field-value))))
-                           {:id (:db/id entity)}
-                           fields)]
-        (reduce
-         (fn [result [field-name func]]
-           (assoc result (keyword field-name) (func entity)))
-         result
-         computed-fields)))))
+                                            ;; if it's not a ref act normally
+                                            (assoc acc field-key (fnk [e] (qualified-field e))))))
+                                      (reduce
+                                       (fn [result [field-name func]]
+                                         (assoc result (keyword field-name) (fnk [e] (count (keys e)))))
+                                       {:id (fnk [e] (:db/id e))}
+                                       computed-fields)
+
+                                      fields))]
+    (fn [entity]
+      ;; so we don't add computed fields to nil
+      (when entity
+        (let [field-keys (map #(keyword ns (first %)) fields)
+              result (somefn {:e entity})]
+          result
+          )))))
 
 (defn ->pull
   "The `pull` function for a given entity"
   [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
-  (fn [db entity-id]
-    (let [view (or (get-in entity [:views :one])
-                   (default-view entity))]
-
+  (let [view (or (get-in entity [:views :one])
+                 (default-view entity))]
+    (fn [db entity-id]
       ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
-      (if (vector? view)
-        (normalize-keys (entity-exists? (d/pull db view entity-id)))
+      ;;(if (vector? view)
+       ;; (normalize-keys (entity-exists? (d/pull db view entity-id)))
 
         (some->> (d/entity db entity-id)
-                 view)))))
+                 view))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
   [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
+  (let [view (or (get-in entity [:views :many])
+                 (default-view entity))]
   (fn [db entity-ids]
-    (let [view (or (get-in entity [:views :many])
-                   (default-view entity))]
-      ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
-      (if (vector? view)
-        (map #(normalize-keys (entity-exists? (d/pull db view %))) entity-ids)
+    ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
+    ;;(if (vector? view)
+    ;; (map #(normalize-keys (entity-exists? (d/pull db view %))) entity-ids)
 
-        (map #(view (d/entity db %)) entity-ids)))))
+    (map #(view (d/entity db %)) entity-ids))))
 
 (defn ->find-by
   "The `find-by` function for a given entity"
   [{fields :fields ns :namespace :as entity}]
-  (fn [db & arg-pairs]
-    ;;find by should always be specified
-    (assert (= 0 (rem (count arg-pairs) 2)))
-    (assert (every? (comp not nil?) arg-pairs))
-    (let [pull (->pull entity)]
+  (let [pull (->pull entity)]
+    (fn [db & arg-pairs]
+      ;;find by should always be specified
+      (assert (= 0 (rem (count arg-pairs) 2)))
+      (assert (every? (comp not nil?) arg-pairs))
       (->> (d/q `{:find [~'?e]
                   :where ~(where-clauses entity (partition-all 2 arg-pairs))}
                 db)
@@ -359,8 +361,8 @@
   [entity]
   (let [fields (:fields entity)
         field?  (set (keys fields))]
-    (fn [db & arg-pairs]
-      (let [pull-many (->pull-many entity)]
+    (let [pull-many (->pull-many entity)]
+      (fn [db & arg-pairs]
         (->> (d/q `{:find [[~'?e ...]]
                     :where ~(where-clauses entity (partition-all 2 arg-pairs))}
                   db)
