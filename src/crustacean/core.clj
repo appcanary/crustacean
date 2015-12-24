@@ -38,6 +38,10 @@
                   (assoc a :computed-fields
                          (reduce (fn [a [nm computed-field]]
                                    (assoc a (name nm) computed-field)) {} values))
+                  :precomputed-views
+                  (assoc a :precomputed-views
+                         (reduce (fn [a [nm precomputed-view]]
+                                   (assoc a (keyword (name nm)) precomputed-view)) {} values))
 
                   :defaults
                   (assoc a :defaults
@@ -287,7 +291,7 @@
 
 (defn default-view
   [{fields :fields backrefs :backrefs computed-fields :computed-fields ns :namespace :as model}]
-  (let [somefn (graph/compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+  (let [somefn (graph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
                                         (let [qualified-field (keyword ns field-name)
                                               field-key (keyword field-name)]
                                           (if (= :ref field-type)
@@ -304,43 +308,52 @@
                                             (assoc acc field-key (fnk [e] (qualified-field e))))))
                                       (reduce
                                        (fn [result [field-name func]]
-                                         (assoc result (keyword field-name) (fnk [e] (count (keys e)))))
+                                         (assoc result (keyword field-name) func))
                                        {:id (fnk [e] (:db/id e))}
                                        computed-fields)
 
                                       fields))]
-    (fn [entity]
+    (fn [entity & [extras]]
       ;; so we don't add computed fields to nil
       (when entity
-        (let [field-keys (map #(keyword ns (first %)) fields)
-              result (somefn {:e entity})]
-          result
-          )))))
+        (let [db (d/entity-db entity)]
+          (somefn (merge {:e entity
+                          :db db}
+                         extras)))))))
+
+(defn precompute-views
+  [{precomputed-views :precomputed-views}]
+  (fn [db entity-ids]
+    (reduce
+     (fn [acc [field-name func]]
+       (assoc acc field-name (func db entity-ids)))
+     {}
+     precomputed-views
+     )))
 
 (defn ->pull
   "The `pull` function for a given entity"
-  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
+  [{fields :fields computed-fields :computed-fields precomputed-views :precomputed-views ns :namespace :as entity}]
   (let [view (or (get-in entity [:views :one])
-                 (default-view entity))]
+                 (default-view entity))
+        extra (precompute-views entity)]
     (fn [db entity-id]
-      ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
-      ;;(if (vector? view)
-       ;; (normalize-keys (entity-exists? (d/pull db view entity-id)))
-
-        (some->> (d/entity db entity-id)
-                 view))))
+      (some-> (d/entity db entity-id)
+              (view (extra db [entity-id]))))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
-  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
+  [{fields :fields computed-fields :computed-fields precomputed-views :precomputed-views ns :namespace :as entity}]
   (let [view (or (get-in entity [:views :many])
-                 (default-view entity))]
-  (fn [db entity-ids]
-    ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
-    ;;(if (vector? view)
-    ;; (map #(normalize-keys (entity-exists? (d/pull db view %))) entity-ids)
+                 (default-view entity))
 
-    (map #(view (d/entity db %)) entity-ids))))
+        extra (precompute-views entity)]
+    (fn [db entity-ids]
+      ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
+      ;;(if (vector? view)
+      ;; (map #(normalize-keys (entity-exists? (d/pull db view %))) entity-ids)
+      (let [lol (extra db entity-ids)]
+        (map #(view (d/entity db %) lol) entity-ids)))))
 
 (defn ->find-by
   "The `find-by` function for a given entity"
@@ -353,8 +366,8 @@
       (->> (d/q `{:find [~'?e]
                   :where ~(where-clauses entity (partition-all 2 arg-pairs))}
                 db)
-           ffirst
-           (pull db)))))
+           ffirst)
+      (pull db))))
 
 (defn ->all-with
   "The `all-with` function for a given entity"
