@@ -7,6 +7,7 @@
             [clojure.string :refer [capitalize]]
 
             [crustacean.schemas :refer :all]
+            [crustacean.lazygraph :as lazygraph]
             [crustacean.utils :refer [normalize-keys entity-exists? fields-with unique-fields remove-nils]]))
 
 ;; note - bad idea to do :assignment-permitted on ref types because it's hard to limit user to only throwing in refs to their own things
@@ -38,11 +39,6 @@
                   (assoc a :computed-fields
                          (reduce (fn [a [nm computed-field]]
                                    (assoc a (name nm) computed-field)) {} values))
-                  :precomputed-views
-                  (assoc a :precomputed-views
-                         (reduce (fn [a [nm precomputed-view]]
-                                   (assoc a (keyword (name nm)) precomputed-view)) {} values))
-
                   :defaults
                   (assoc a :defaults
                          (reduce (fn [a [nm default]]
@@ -292,68 +288,53 @@
 (defn default-view
   [{fields :fields backrefs :backrefs computed-fields :computed-fields ns :namespace :as model}]
   (let [somefn (graph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
-                                        (let [qualified-field (keyword ns field-name)
-                                              field-key (keyword field-name)]
-                                          (if (= :ref field-type)
-                                            ;; if we have a model, use its view
-                                            (if ref-model
-                                              (let [view (default-view (eval (symbol ref-model)))]
-                                                (if (contains? field-opts :many)
-                                                  (assoc acc field-key (fnk [e] (mapv view (qualified-field e))))
-                                                  (assoc acc field-key (fnk [e] (view (qualified-field e))))))
-                                              ;; else we don't include it
-                                              acc)
+                                             (let [qualified-field (keyword ns field-name)
+                                                   field-key (keyword field-name)]
+                                               (if (= :ref field-type)
+                                                 ;; if we have a model, use its view
+                                                 (if ref-model
+                                                   (let [view (default-view (eval (symbol ref-model)))]
+                                                     (if (contains? field-opts :many)
+                                                       (assoc acc field-key (fnk [e] (mapv view (qualified-field e))))
+                                                       (assoc acc field-key (fnk [e] (view (qualified-field e))))))
+                                                   ;; else we don't include it
+                                                   acc)
 
-                                            ;; if it's not a ref act normally
-                                            (assoc acc field-key (fnk [e] (qualified-field e))))))
-                                      (reduce
-                                       (fn [result [field-name func]]
-                                         (assoc result (keyword field-name) func))
-                                       {:id (fnk [e] (:db/id e))}
-                                       computed-fields)
+                                                 ;; if it's not a ref act normally
+                                                 (assoc acc field-key (fnk [e] (qualified-field e))))))
+                                           (reduce
+                                            (fn [result [field-name func]]
+                                              (assoc result (keyword field-name) func))
+                                            {:id (fnk [e] (:db/id e))}
+                                            computed-fields)
 
-                                      fields))]
-    (fn [entity & [extras]]
+                                           fields))]
+    (fn [entity]
       ;; so we don't add computed fields to nil
       (when entity
-        (let [db (d/entity-db entity)]
-          (somefn (merge {:e entity
-                          :db db}
-                         extras)))))))
+        (somefn {:e entity
+                 :db (d/entity-db entity)})
+        ))))
 
-(defn precompute-views
-  [{precomputed-views :precomputed-views}]
-  (fn [db entity-ids]
-    (reduce
-     (fn [acc [field-name func]]
-       (assoc acc field-name (func db entity-ids)))
-     {}
-     precomputed-views
-     )))
 
 (defn ->pull
   "The `pull` function for a given entity"
-  [{fields :fields computed-fields :computed-fields precomputed-views :precomputed-views ns :namespace :as entity}]
+  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
   (let [view (or (get-in entity [:views :one])
-                 (default-view entity))
-        extra (precompute-views entity)]
+                 (default-view entity))]
     (fn [db entity-id]
-      (some-> (d/entity db entity-id)
-              (view (extra db [entity-id]))))))
+      (view (d/entity db entity-id)))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
   [{fields :fields computed-fields :computed-fields precomputed-views :precomputed-views ns :namespace :as entity}]
   (let [view (or (get-in entity [:views :many])
-                 (default-view entity))
-
-        extra (precompute-views entity)]
+                 (default-view entity))]
     (fn [db entity-ids]
       ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
       ;;(if (vector? view)
       ;; (map #(normalize-keys (entity-exists? (d/pull db view %))) entity-ids)
-      (let [lol (extra db entity-ids)]
-        (map #(view (d/entity db %) lol) entity-ids)))))
+      (map #(view (d/entity db %)) entity-ids))))
 
 (defn ->find-by
   "The `find-by` function for a given entity"
@@ -366,8 +347,8 @@
       (->> (d/q `{:find [~'?e]
                   :where ~(where-clauses entity (partition-all 2 arg-pairs))}
                 db)
-           ffirst)
-      (pull db))))
+           ffirst
+           (pull db)))))
 
 (defn ->all-with
   "The `all-with` function for a given entity"
