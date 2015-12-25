@@ -285,9 +285,10 @@
                    `[[~'?e ~(keyword (:namespace entity) (name (first arg-pair)))]]))
                arg-pairs)))
 
-(defn default-view
-  [{fields :fields backrefs :backrefs computed-fields :computed-fields ns :namespace :as model}]
-  (let [somefn (lazygraph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+(defn ->pull
+  "The `pull` function for a given entity"
+  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
+  (let [view (lazygraph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
                                              (let [qualified-field (keyword ns field-name)
                                                    field-key (keyword field-name)]
                                                (if (= :ref field-type)
@@ -309,32 +310,17 @@
                                             computed-fields)
 
                                            fields))]
-    (fn [entity]
-      ;; so we don't add computed fields to nil
-      (when entity
-        (somefn {:e entity
-                 :db (d/entity-db entity)})
-        ))))
-
-
-(defn ->pull
-  "The `pull` function for a given entity"
-  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
-  (let [view (or (get-in entity [:views :one])
-                 (default-view entity))]
     (fn [db entity-id]
-      (view (d/entity db entity-id)))))
+      (when entity-id
+        (view {:e (d/entity db entity-id)
+               :db db})))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
-  [{fields :fields computed-fields :computed-fields precomputed-views :precomputed-views ns :namespace :as entity}]
-  (let [view (or (get-in entity [:views :many])
-                 (default-view entity))]
+  [model]
+  (let [pull (->pull model)]
     (fn [db entity-ids]
-      ;; If the view is a vector pull directly, otherwise use the entity api and call view as a func
-      ;;(if (vector? view)
-      ;; (map #(normalize-keys (entity-exists? (d/pull db view %))) entity-ids)
-      (map #(view (d/entity db %)) entity-ids))))
+      (map #(pull db %) entity-ids))))
 
 (defn ->find-by
   "The `find-by` function for a given entity"
