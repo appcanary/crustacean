@@ -287,7 +287,7 @@
 
 (defn default-view
   [{fields :fields backrefs :backrefs computed-fields :computed-fields ns :namespace :as model}]
-  (let [somefn (graph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+  (let [somefn (lazygraph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
                                              (let [qualified-field (keyword ns field-name)
                                                    field-key (keyword field-name)]
                                                (if (= :ref field-type)
