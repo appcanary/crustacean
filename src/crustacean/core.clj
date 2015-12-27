@@ -10,65 +10,81 @@
             [crustacean.lazygraph :as lazygraph]
             [crustacean.utils :refer [normalize-keys entity-exists? fields-with unique-fields remove-nils]]))
 
-;; note - bad idea to do :assignment-permitted on ref types because it's hard to limit user to only throwing in refs to their own things
 ;; TODO
 ;; - Documentation/readme
 ;; - Tests
 ;; - add support for backrefs in composite keys
+
+
 ;; ## The main macro
+
+(defn single-value
+  "Process a single value model definition, such as
+  (:some-field 123)"
+  [k]
+  [k (fn [values]
+     [k (first values)])])
 
 (defn defentity*
   "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defentity`"
   [nm forms]
-  (-> (reduce (fn [a [k & values]]
-                (case k
-                  :migration-file
-                  (assoc a :migration-file (first values))
 
-                  :migration-version
-                  (assoc a :migration-version (first values))
+  (-> (into
+      {}
+      (for [[k & values] forms]
+        (case k
+          :migration-file
+          [:migration-file (first values)]
 
-                  :fields
-                  (assoc a :fields
-                         (reduce (fn [a [nm tp & opts]]
-                                   (if (vector? tp)
-                                     (assoc a (name nm) [(first tp) (set opts) (str (second tp))])
-                                     (assoc a (name nm) [tp (set opts)]))) {} values))
+          :migration-version
+          [:migration-version (first values)]
 
-                  :computed-fields
-                  (assoc a :computed-fields
-                         (reduce (fn [a [nm computed-field]]
-                                   (assoc a (name nm) computed-field)) {} values))
-                  :defaults
-                  (assoc a :defaults
-                         (reduce (fn [a [nm default]]
-                                   (assoc a (name nm) (if (list? default)
-                                                        `(quote ~default)
-                                                        default))) {} values))
-                  :validators
-                  (assoc a :validators
-                         (reduce (fn [a [nm validator]]
-                                   (assoc a (name nm) (if (list? validator)
-                                                        `(quote ~validator)
-                                                        validator))) {} values))
+          :fields
+          [:fields (->> (for [[nm tp & opts] values]
+                          [(name nm)
+                           (if (vector? tp)
+                             [(first tp) (set opts) (str (second tp))]
+                             [tp (set opts)])])
+                        (into {}))]
 
-                  :composite-keys
-                  (assoc a :composite-keys
-                         (mapv #(mapv keyword %) values))
+          :computed-fields
+          [:computed-fields (->> (for [[nm computed-field] values]
+                                   [(name nm) computed-field])
+                                 (into {}))]
 
-                  :views
-                  (assoc a :views (apply hash-map values))
+          :defaults
+          [:defaults (->> (for [[nm default] values]
+                            ;; Defaults are computed inside the transactor, so
+                            ;; we have to send datomic the list form instead of
+                            ;; a function object
+                            [(name nm) (if (list? default)
+                                         `(quote ~default)
+                                         default)])
+                          (into {}))]
 
-                  :backrefs
-                  (assoc a :backrefs
-                         (reduce (fn [a [nm opt]]
-                                   (assoc a (keyword nm) opt)) {} values))
+          :validators
+          [:validators (->> (for [[nm validator] values]
+                               ;; Validators are computed inside the transactor, so
+                               ;; we have to send datomic the list form instead of
+                               ;; a function object
+                               [(name nm) (if (list? validator)
+                                            `(quote ~validator)
+                                            validator)])
+                            (into {}))]
+          ;; To be implemented
+          :composite-keys
+          [:composite-keys (mapv #(mapv keyword %) values)]
 
-                  :extra-txes
-                  (assoc a :extra-txes (first values))))
+          :views
+          [:views (apply hash-map values)]
 
-              {}
-              forms)
+          :backrefs
+          [:backrefs (->> (for [[nm opt] values]
+                            [(keyword nm) opt])
+                          (into {}))]
+
+          :extra-txes
+          [:extra-txes (first values)])))
       (assoc :name (name nm)
              :basetype (keyword nm)
              :namespace (name nm))))
