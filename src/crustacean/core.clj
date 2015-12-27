@@ -297,11 +297,11 @@
                  (if ref-model
                    (let [sub-graph (->graph (eval (symbol ref-model)))]
                      (if (contains? field-opts :many)
-                       (assoc acc field-key (fnk [db eid e] (mapv #(sub-graph {:e % :db db :eid (:db/id %)}) (qualified-field e))))
+                       (assoc acc field-key (fnk [db e] (mapv #(sub-graph {:e % :db db}) (qualified-field e))))
 
-                       (assoc acc field-key (fnk [db eid e]
+                       (assoc acc field-key (fnk [db e]
                                                  (let [sub-entity (qualified-field e)]
-                                                   (sub-graph {:e sub-entity :eid (:db/id sub-entity) :db db}))))))
+                                                   (sub-graph {:e sub-entity :db db}))))))
                    ;; else we don't include it
                    acc)
 
@@ -309,7 +309,7 @@
                  (assoc acc field-key (fnk [e] (qualified-field e))))))
            (reduce
             (fn [result [field-name func]] (assoc result (keyword field-name) func))
-            {:id (fnk [eid] eid)}
+            {:id (fnk [e] (:db/id e))}
             computed-fields)
 
            fields)
@@ -322,7 +322,7 @@
   (let [model-graph (->graph model)]
     (fn [db entity-id]
       (when entity-id
-        (model-graph {:e (delay (println "GOD IT BRO")(d/entity db entity-id)) :eid entity-id :db db})))))
+        (model-graph {:e (delay (d/entity db entity-id)) :db db})))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
