@@ -285,35 +285,44 @@
                    `[[~'?e ~(keyword (:namespace entity) (name (first arg-pair)))]]))
                arg-pairs)))
 
+(defn ->graph
+  "Builds a graph that can serialize a model"
+  [{fields :fields computed-fields :computed-fields ns :namespace :as model}]
+  (lazygraph/eager-compile
+   (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+             (let [qualified-field (keyword ns field-name)
+                   field-key (keyword field-name)]
+               (if (= :ref field-type)
+                 ;; if we have a model, use its view
+                 (if ref-model
+                   (let [sub-graph (->graph (eval (symbol ref-model)))]
+                     (if (contains? field-opts :many)
+                       (assoc acc field-key (fnk [db eid e] (mapv #(sub-graph {:e % :db db :eid (:db/id %)}) (qualified-field e))))
+
+                       (assoc acc field-key (fnk [db eid e]
+                                                 (let [sub-entity (qualified-field e)]
+                                                   (sub-graph {:e sub-entity :eid (:db/id sub-entity) :db db}))))))
+                   ;; else we don't include it
+                   acc)
+
+                 ;; if it's not a ref act normally
+                 (assoc acc field-key (fnk [e] (qualified-field e))))))
+           (reduce
+            (fn [result [field-name func]] (assoc result (keyword field-name) func))
+            {:id (fnk [eid] eid)}
+            computed-fields)
+
+           fields)
+   #_[:e])
+  )
+
 (defn ->pull
   "The `pull` function for a given entity"
-  [{fields :fields computed-fields :computed-fields ns :namespace :as entity}]
-  (let [view (lazygraph/lazy-compile (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
-                                             (let [qualified-field (keyword ns field-name)
-                                                   field-key (keyword field-name)]
-                                               (if (= :ref field-type)
-                                                 ;; if we have a model, use its view
-                                                 (if ref-model
-                                                   (let [view (default-view (eval (symbol ref-model)))]
-                                                     (if (contains? field-opts :many)
-                                                       (assoc acc field-key (fnk [e] (mapv view (qualified-field e))))
-                                                       (assoc acc field-key (fnk [e] (view (qualified-field e))))))
-                                                   ;; else we don't include it
-                                                   acc)
-
-                                                 ;; if it's not a ref act normally
-                                                 (assoc acc field-key (fnk [e] (qualified-field e))))))
-                                           (reduce
-                                            (fn [result [field-name func]]
-                                              (assoc result (keyword field-name) func))
-                                            {:id (fnk [e] (:db/id e))}
-                                            computed-fields)
-
-                                           fields))]
+  [{fields :fields computed-fields :computed-fields ns :namespace :as model}]
+  (let [model-graph (->graph model)]
     (fn [db entity-id]
       (when entity-id
-        (view {:e (d/entity db entity-id)
-               :db db})))))
+        (model-graph {:e (delay (println "GOD IT BRO")(d/entity db entity-id)) :eid entity-id :db db})))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
