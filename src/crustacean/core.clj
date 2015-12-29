@@ -283,22 +283,28 @@
           (pull db-after id))))))
 
 ;; ## Entity Access
-(defn where-clauses
-  "Generate where clauses for based on a list of attribute values or attributes"
+(defn generate-query
+  "Generates the datomic query for arg-pairs"
   [entity arg-pairs]
-  (vec (mapcat (fn [arg-pair]
-                 (if (and (= 2 (count arg-pair)) (not (nil? (second arg-pair))))
-                   (let [[attr value] arg-pair
-                         sym (gensym "?")]
-                     (if (re-find #"^_" (name attr))
-                                        ; if the attr is a backreference (:foo/_bar) look it up as a backreference
-                       `[[~sym ~(keyword (namespace attr) (.substring (name attr) 1)) ~'?e]
-                         [(~'ground ~value) ~sym]]
-                       `[[~'?e ~(keyword (:namespace entity) (name attr)) ~sym]
-                         [(~'ground ~value) ~sym]]))
-                   ;; TODO correctly process single arg-pair with backref
-                   `[[~'?e ~(keyword (:namespace entity) (name (first arg-pair)))]]))
-               arg-pairs)))
+  (if (and (= 1 (count arg-pairs)) (nil? (second (first arg-pairs))))
+    ;; We have a query like (all-with db :name))
+    `{:find [[~'?e ~'...]]
+      :where [[~'?e ~(keyword (:namespace entity) (name (ffirst arg-pairs)))]]}
+    ;; We have to build query with in and where clauses
+    (let [stuff (for [[field value] arg-pairs]
+
+                  [(gensym "?") field])
+          in-clauses (into ['$] (map first stuff))
+          where-clauses (for [[sym field] stuff]
+                          (if (re-find #"^_" (name field))
+                            ;; if the attr is a backreference (:foo/_bar) look it up as a backreference
+                            `[~sym ~(keyword (namespace field) (.substring (name field) 1)) ~'?e]
+                            `[~'?e ~(keyword (:namespace entity) (name field)) ~sym]))]
+
+      `{:find [[~'?e ...]]
+        :in ~in-clauses
+        :where ~where-clauses}
+      )))
 
 (defn ->graph
   "Builds a graph that can serialize a model"
@@ -347,26 +353,26 @@
 (defn ->find-by
   "The `find-by` function for a given entity"
   [{fields :fields ns :namespace :as entity} pull]
-    (fn [db & arg-pairs]
+    (fn [db & args]
       ;;find by should always be specified
-      (assert (= 0 (rem (count arg-pairs) 2)))
-      (assert (every? (comp not nil?) arg-pairs))
-      (->> (d/q `{:find [~'?e]
-                  :where ~(where-clauses entity (partition-all 2 arg-pairs))}
-                db)
-           ffirst
-           (pull db))))
+      (assert (= 0 (rem (count args) 2)))
+      (assert (every? (comp not nil?) args))
+      (let [arg-pairs (partition-all 2 args)]
+        (->> (d/query {:query (generate-query entity arg-pairs)
+                       :args (into [db] (remove nil? (map second arg-pairs)))})
+             first
+             (pull db)))))
 
 (defn ->all-with
   "The `all-with` function for a given entity"
   [entity pull-many]
   (let [fields (:fields entity)
         field?  (set (keys fields))]
-      (fn [db & arg-pairs]
-        (->> (d/q `{:find [[~'?e ...]]
-                    :where ~(where-clauses entity (partition-all 2 arg-pairs))}
-                  db)
-             (pull-many db)))))
+    (fn [db & args]
+      (let [arg-pairs (partition-all 2 args)]
+        (->> (d/query {:query (generate-query entity arg-pairs)
+                       :args (into [db] (remove nil? (map second arg-pairs)))})
+             (pull-many db))))))
 
 ;; TODO: this should be atomic
 (defn ->find-or-create
