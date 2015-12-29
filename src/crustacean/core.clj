@@ -18,97 +18,98 @@
 
 ;; ## The main macro
 
-(defn single-value
-  "Process a single value model definition, such as
-  (:some-field 123)"
-  [k]
-  [k (fn [values]
-     [k (first values)])])
+(declare ->malformed? ->malformed?* ->exists? ->exists?* ->create ->create* ->find-by ->pull ->pull-many ->all-with ->find-or-create ->input-schema ->input-schema* ->output-schema ->graph)
 
 (defn defentity*
   "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defentity`"
   [nm forms]
 
-  (-> (into
-      {}
-      (for [[k & values] forms]
-        (case k
-          :migration-file
-          [:migration-file (first values)]
+  (let [model (into
+               {}
+               (for [[k & values] forms]
+                 (case k
+                   :migration-file
+                   [:migration-file (first values)]
 
-          :migration-version
-          [:migration-version (first values)]
+                   :migration-version
+                   [:migration-version (first values)]
 
-          :fields
-          [:fields (->> (for [[nm tp & opts] values]
-                          [(name nm)
-                           (if (vector? tp)
-                             [(first tp) (set opts) (str (second tp))]
-                             [tp (set opts)])])
-                        (into {}))]
-
-          :computed-fields
-          [:computed-fields (->> (for [[nm computed-field] values]
-                                   [(name nm) computed-field])
+                   :fields
+                   [:fields (->> (for [[nm tp & opts] values]
+                                   [(name nm)
+                                    (if (vector? tp)
+                                      [(first tp) (set opts) (str (second tp))]
+                                      [tp (set opts)])])
                                  (into {}))]
 
-          :defaults
-          [:defaults (->> (for [[nm default] values]
-                            ;; Defaults are computed inside the transactor, so
-                            ;; we have to send datomic the list form instead of
-                            ;; a function object
-                            [(name nm) (if (list? default)
-                                         `(quote ~default)
-                                         default)])
-                          (into {}))]
+                   :computed-fields
+                   [:computed-fields (->> (for [[nm computed-field] values]
+                                            [(name nm) computed-field])
+                                          (into {}))]
 
-          :validators
-          [:validators (->> (for [[nm validator] values]
-                               ;; Validators are computed inside the transactor, so
-                               ;; we have to send datomic the list form instead of
-                               ;; a function object
-                               [(name nm) (if (list? validator)
-                                            `(quote ~validator)
-                                            validator)])
-                            (into {}))]
-          ;; To be implemented
-          :composite-keys
-          [:composite-keys (mapv #(mapv keyword %) values)]
+                   :defaults
+                   [:defaults (->> (for [[nm default] values]
+                                     [(name nm) default])
+                                   (into {}))]
 
-          :views
-          [:views (apply hash-map values)]
+                   :validators
+                   [:validators (->> (for [[nm validator] values]
+                                       [(name nm) validator])
+                                     (into {}))]
+                   ;; To be implemented
+                   :composite-keys
+                   [:composite-keys (mapv #(mapv keyword %) values)]
 
-          :backrefs
-          [:backrefs (->> (for [[nm opt] values]
-                            [(keyword nm) opt])
-                          (into {}))]
+                   :views
+                   [:views (apply hash-map values)]
 
-          :extra-txes
-          [:extra-txes (first values)])))
-      (assoc :name (name nm)
+                   :backrefs
+                   [:backrefs (->> (for [[nm opt] values]
+                                     [(keyword nm) opt])
+                                   (into {}))]
+
+                   :extra-txes
+                   [:extra-txes (first values)])))]
+
+    (let [input-schema* (->input-schema* model)]
+      (assoc model
+             :name (name nm)
              :basetype (keyword nm)
-             :namespace (name nm))))
+             :namespace (name nm)
+             :input-schema (eval input-schema*)
+             :db-funcs {:malformed?* (->malformed?* model input-schema*)
+                        :exists?* (->exists?* model)
+                        :create* (->create* model)}))))
 
-
-(declare ->malformed? ->exists? ->create ->find-by ->pull ->all-with ->find-or-create ->input-schema ->output-schema)
 
 (defmacro defentity
   "Takes an entity specification in a friendly syntax and creates the entity, along with all of the requisite functions"
   [nm & forms]
-  (let [entity (defentity* nm forms)]
-    `(do (def ~nm ~entity)
-         (def ~'malformed? (->malformed? ~entity))
-         (def ~'exists? (->exists? ~entity))
-         (def ~'create (->create ~entity))
-         (def ~'find-by (->find-by ~entity))
-         (def ~'pull (->pull ~entity))
-         (def ~'pull-many (->pull-many ~entity))
-         (def ~'all-with (->all-with ~entity))
-         (def ~'find-or-create (->find-or-create ~entity))
+  (let [model (defentity* nm forms)
+        input-schema (->input-schema model)
+        output-schema (->output-schema model)
+        malformed? (->malformed? model)
+        exists? (->exists? model)
+        graph (->graph model)
+        pull (->pull model graph)
+        pull-many (->pull-many model pull)
+        create (->create model pull)
+        find-by (->find-by model pull)
+        all-with (->all-with model pull-many)
+        find-or-create (->find-or-create model find-by create)]
+    `(do (def ~nm ~model)
+          (def ~'malformed? ~malformed?)
+          (def ~'exists? ~exists?)
+          (def ~'create ~create)
+          (def ~'find-by ~find-by)
+          (def ~'pull ~pull)
+          (def ~'pull-many ~pull-many)
+          (def ~'all-with ~all-with)
+          (def ~'find-or-create ~find-or-create)
          ;; TODO these names suck
-         (def ~'DBInputSchema (->input-schema ~entity)) ;; this is what we validate the db against
-         (def ~'APIInputSchema (apply dissoc (->input-schema ~entity) (keys (:backrefs ~entity)))) ;;this is what we validate the api against -- we allow backrefs
-         (def ~'OutputSchema (->output-schema ~entity)))))
+         (def ~'DBInputSchema ~input-schema) ;; this is what we validate the db against
+         (def ~'APIInputSchema (apply dissoc ~input-schema (keys (:backrefs ~model)))) ;;this is what we validate the api against -- we allow backrefs
+        (def ~'OutputSchema ~output-schema))))
 
 (defn field-spec->schema
   "Convert a field spec to a prismatic schema"
@@ -168,8 +169,8 @@
 
 (defn ->input-schema
   "The input schema for a given entity"
-  [entity]
-  (s/schema-with-name (eval (->input-schema* entity)) (str (capitalize (:name entity)) "In")))
+  [{:keys [input-schema] :as model}]
+  (s/schema-with-name input-schema (str (capitalize (:name model)) "In")))
 
 (defn ->output-schema
   "The output schema for a given entity"
@@ -185,19 +186,19 @@
 
 (defn ->malformed?*
   "The malformed? database function for a given entity"
-  [entity]
+  [entity input-schema*]
   (d/function
    `{:lang :clojure
      :requires [[schema.core]]
      :params [input#]
-     :code (let [checker#  (schema.core/checker (eval ~(->input-schema* entity)))]
+     :code (let [checker#  (schema.core/checker (eval ~input-schema*))]
              (checker# input#))}))
 
 
 (defn ->malformed?
   "The `malformed?` function for a given entity"
-  [entity]
-  (s/checker (->input-schema entity)))
+  [{:keys [input-schema] :as model}]
+  (s/checker {}#_input-schema))
 
 (defn ->exists?*
   "The `exists?` database function for a given entity"
@@ -269,13 +270,11 @@
                    )))})))
 (defn ->create
   "The `create!` function for a given entity"
-  [entity]
-  (let [input-schema (->input-schema entity)
-        create-fn (keyword (:namespace entity) "create")
-        pull (->pull entity)]
+  [entity pull]
+  (let [create-fn (keyword (:namespace entity) "create")]
     (fn [conn dirty-input]
       (let [input (remove-nils dirty-input)]
-        (s/validate input-schema input)
+        (s/validate (:input-schema entity) input)
         (assert (not ((->exists? entity) (d/db conn) input)))
         (let [tempid (d/tempid :db.part/user -1)
               {:keys [tempids db-after]} @(d/transact conn [[create-fn tempid input]
@@ -324,7 +323,7 @@
                  ;; if it's not a ref act normally
                  (assoc acc field-key (fnk [e] (qualified-field e))))))
            (reduce
-            (fn [result [field-name func]] (assoc result (keyword field-name) func))
+            (fn [result [field-name func]] (assoc result (keyword field-name) (eval func)))
             {:id (fnk [e] (:db/id e))}
             computed-fields)
 
@@ -334,23 +333,20 @@
 
 (defn ->pull
   "The `pull` function for a given entity"
-  [{fields :fields computed-fields :computed-fields ns :namespace :as model}]
-  (let [model-graph (->graph model)]
+  [model graph]
     (fn [db entity-id]
       (when entity-id
-        (model-graph {:e (delay (d/entity db entity-id)) :db db})))))
+        (graph {:e (delay (d/entity db entity-id)) :db db}))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
-  [model]
-  (let [pull (->pull model)]
-    (fn [db entity-ids]
-      (map #(pull db %) entity-ids))))
+  [model pull]
+  (fn [db entity-ids]
+    (map #(pull db %) entity-ids)))
 
 (defn ->find-by
   "The `find-by` function for a given entity"
-  [{fields :fields ns :namespace :as entity}]
-  (let [pull (->pull entity)]
+  [{fields :fields ns :namespace :as entity} pull]
     (fn [db & arg-pairs]
       ;;find by should always be specified
       (assert (= 0 (rem (count arg-pairs) 2)))
@@ -359,27 +355,24 @@
                   :where ~(where-clauses entity (partition-all 2 arg-pairs))}
                 db)
            ffirst
-           (pull db)))))
+           (pull db))))
 
 (defn ->all-with
   "The `all-with` function for a given entity"
-  [entity]
+  [entity pull-many]
   (let [fields (:fields entity)
         field?  (set (keys fields))]
-    (let [pull-many (->pull-many entity)]
       (fn [db & arg-pairs]
         (->> (d/q `{:find [[~'?e ...]]
                     :where ~(where-clauses entity (partition-all 2 arg-pairs))}
                   db)
-             (pull-many db))))))
+             (pull-many db)))))
 
 ;; TODO: this should be atomic
 (defn ->find-or-create
   "Find an entity or create it if it doesn't exist"
-  [entity]
-  (let [find-by (->find-by entity)
-        create (->create entity)]
+  [entity find-by create]
     (fn [conn input]
       (let [db (d/db conn)]
         (or (apply find-by (flatten (cons db (seq input)))) ;; (find db key val key2 val2 ...)
-            (create conn input))))))
+            (create conn input)))))
