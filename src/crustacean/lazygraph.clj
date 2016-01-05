@@ -15,8 +15,6 @@
   (:import
    clojure.lang.IFn))
 
-;; TODO make this performant. It's about twice as slow as kotarak's lazymap. We should make the graph compile into a custom type that behaves like a lazy map, ala the eager graph
-
 (defn force-lazy-map
   "Returns a map with all the delays forced"
   [lm]
@@ -58,6 +56,9 @@
   [m]
   (LazyMap. m {}))
 
+;; The functions below are from https://github.com/Prismatic/plumbing/blob/6f9f1b6453ed2c978a619dc99bb0317d8c053141/src/plumbing/graph/positional.clj
+;; We need to modify Prismatic's graph library slightly to use our LazyMap implemetation to wrap the graph record
+
 (defn def-graph-record
   "Define a record for the output of a graph. It is usable as a function to be
   as close to a map as possible. Return the typename."
@@ -89,6 +90,7 @@
               (let [f-sym (-> kw name (str "-fn") gensym)
                     arg-forms (map-from-keys g-value-syms (pfnk/input-schema-keys f))
                     [f arg-forms] (fnk-impl/efficient-call-forms f arg-forms)]
+                ;; Wrap original implementation with a delay & force
                 [[f-sym f] [(g-value-syms kw) `(delay (~f-sym ~@(map #(list 'force %) arg-forms)))]])))
        (apply map vector)))
 
