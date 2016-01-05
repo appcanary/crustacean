@@ -291,11 +291,12 @@
     `{:find [[~'?e ~'...]]
       :where [[~'?e ~(keyword (:namespace entity) (name (ffirst arg-pairs)))]]}
     ;; We have to build query with in and where clauses
-    (let [stuff (for [[field value] arg-pairs]
-
-                  [(gensym "?") field])
-          in-clauses (into ['$] (map first stuff))
-          where-clauses (for [[sym field] stuff]
+    (let [arg-names (into {}
+                          (for [[field value] arg-pairs]
+                            ;; Sometimes we have nil as a value, in that case we use '_ as the sym since we aren't binding the result
+                            [(if value (gensym "?") '_) field]))
+          in-clauses (into ['$] (remove #(= '_ %) (map first arg-names)))
+          where-clauses (for [[sym field] arg-names]
                           (if (re-find #"^_" (name field))
                             ;; if the attr is a backreference (:foo/_bar) look it up as a backreference
                             `[~sym ~(keyword (namespace field) (.substring (name field) 1)) ~'?e]
