@@ -278,8 +278,10 @@
        :code
        (if-let [malformed# (d/invoke db# (keyword ~(:namespace entity) "malformed?") input#)]
          (throw (IllegalArgumentException. (str malformed#)))
+
          (if (d/invoke db# (keyword ~(:namespace entity) "exists?") db# input#)
            (throw (IllegalStateException. "entity already exists"))
+
            (vector (into {:db/id id#}
                          (concat
                           (for [[field# [type# opts#]] ~fields]
@@ -314,29 +316,33 @@
         (s/validate (:input-schema entity) input)
         (assert (not ((->exists? entity) (d/db conn) input)))
         (let [tempid (d/tempid :db.part/user -1)
-              {:keys [tempids db-after]} @(d/transact conn [[create-fn tempid input]
-                                                            ])
+              {:keys [tempids db-after]} @(d/transact conn [[create-fn tempid input]])
               id (d/resolve-tempid db-after tempids tempid)]
           (pull db-after id))))))
 
 ;; ## Entity Access
 (defn generate-query
-  "Generates the datomic query for arg-pairs"
+  "Generates the datomic query given a model and arg-pairs, a vector of pairs of [:field value], where value can be nil"
   [entity arg-pairs]
   (if (and (= 1 (count arg-pairs)) (nil? (second (first arg-pairs))))
     ;; We have a query like (all-with db :name))
     `{:find [[~'?e ~'...]]
       :where [[~'?e ~(keyword (:namespace entity) (name (ffirst arg-pairs)))]]}
-    ;; We have to build query with in and where clauses
-    (let [arg-names (into {}
+
+    ;; We have to generate the in and where clauses for the query
+    (let [field-symbols (into {}
                           (for [[field value] arg-pairs]
                             ;; Sometimes we have nil as a value, in that case we use '_ as the sym since we aren't binding the result
-                            [(if value (gensym "?") '_) field]))
-          in-clauses (into ['$] (remove #(= '_ %) (map first arg-names)))
-          where-clauses (for [[sym field] arg-names]
+                            [field (if value (gensym "?") '_)]))
+
+          ;; Insert the symbols that correspond to the fields we're searching for, ignoring _'s
+          in-clauses (into ['$] (remove #(= '_ %) (map second field-symbols)))
+
+          where-clauses (for [[field sym] field-symbols]
+                          ;; if the attr is a backreference (:foo/_bar) look it up as a backreference
                           (if (re-find #"^_" (name field))
-                            ;; if the attr is a backreference (:foo/_bar) look it up as a backreference
                             `[~sym ~(keyword (namespace field) (.substring (name field) 1)) ~'?e]
+
                             `[~'?e ~(keyword (:namespace entity) (name field)) ~sym]))]
 
       `{:find [[~'?e ...]]
