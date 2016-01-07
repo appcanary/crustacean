@@ -351,35 +351,38 @@
       )))
 
 (defn ->graph
-  "Builds a graph that can serialize a model"
+  "Given a model, compile a graph that given a db and a datomic entity outputs a lazy map representing the entity"
   [{fields :fields computed-fields :computed-fields ns :namespace :as model}]
-  (lazygraph/eager-compile
-   (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
-             (let [qualified-field (keyword ns field-name)
-                   field-key (keyword field-name)]
-               (if (= :ref field-type)
-                 ;; if we have a model, use its view
-                 (if ref-model
-                   (let [sub-graph (->graph (eval (symbol ref-model)))]
-                     (if (contains? field-opts :many)
-                       (assoc acc field-key (fnk [db e] (mapv #(sub-graph {:e % :db db}) (qualified-field e))))
+  (lazygraph/lazy-compile
+   (let [computed-fields-graph (reduce
+                                (fn [result [field-name func]]
+                                  (assoc result (keyword field-name) (eval func)))
+                                ;; Start with the id field
+                                {:id (fnk [e] (:db/id e))}
+                                computed-fields)]
 
-                       (assoc acc field-key (fnk [db e]
-                                                 (let [sub-entity (qualified-field e)]
-                                                   (sub-graph {:e sub-entity :db db}))))))
-                   ;; else we don't include it
-                   acc)
+     (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
+               (let [qualified-field (keyword ns field-name)
+                     field-key (keyword field-name)]
+                 (if (= :ref field-type)
+                   ;; if we have a model, use its view
+                   (if ref-model
+                     (let [sub-graph (->graph (eval (symbol ref-model)))]
+                       (if (contains? field-opts :many)
+                         (assoc acc field-key (fnk [db e] (mapv #(sub-graph {:e % :db db}) (qualified-field e))))
 
-                 ;; if it's not a ref act normally
-                 (assoc acc field-key (fnk [e] (qualified-field e))))))
-           (reduce
-            (fn [result [field-name func]] (assoc result (keyword field-name) (eval func)))
-            {:id (fnk [e] (:db/id e))}
-            computed-fields)
+                         (assoc acc field-key (fnk [db e]
+                                                   (let [sub-entity (qualified-field e)]
+                                                     (sub-graph {:e sub-entity :db db}))))))
+                     ;; else we don't include it
+                     acc)
 
-           fields)
-   #_[:e])
-  )
+                   ;; if it's not a ref act normally
+                   (assoc acc field-key (fnk [e] (qualified-field e))))))
+
+             computed-fields-graph
+
+             fields))))
 
 (defn ->pull
   "The `pull` function for a given entity"

@@ -140,7 +140,8 @@
              [output-schema-sym (pfnk/output-schema g)]]))
      assoc :schema (let [[is os] (pfnk/io-schemata g)] (s/=> os is)))))
 
-(defn eager-compile
+;; Ports of prismatic eager-compile & positional-eager-compile
+(defn lazy-compile
   "Compile graph specification g to a corresponding fnk that is optimized for
    speed. Wherever possible, fnks are called positionally, to reduce the
    overhead of creating and destructuring maps, and the return value is a
@@ -150,28 +151,13 @@
   (if (fn? g)
     g
     (let [g (for [[k sub-g] (graph/->graph g)]
-              [k (eager-compile sub-g)])]
+              [k (lazy-compile sub-g)])]
       (positional-flat-compile (graph/->graph g)))))
 
-(defn positional-eager-compile
+(defn positional-lazy-compile
   "Like eager-compile, but produce a non-keyword function that can be called
    with args in the order provided by arg-ks, avoiding the overhead of creating
    and destructuring a top-level map.  This can yield a substantially faster
    fn for Graphs with very computationally inexpensive node fnks."
   [g arg-ks]
-  (fnk-impl/positional-fn (eager-compile g) arg-ks))
-
-(defn lazy-compile
-  "Compile graph specification g to a corresponding fnk that returns a
-   lazymap of the node result fns on a given input.  This fnk returns
-   the lazymap immediately, and node values are computed and cached as needed
-   as values are extracted from the lazymap.  Besides this lazy behavior,
-   the lazymap can be used interchangeably with an ordinary Clojure map.
-   Required inputs to the graph are checked lazily, so you can omit input
-   keys not required by unneeded output keys."
-  [g]
-  (graph/simple-hierarchical-compile
-   g
-   false
-   (fn [m] (let [x (reduce-kv assoc (lazy-map {}) m)] x))
-   (fn [m k f] (assoc m k (delay (graph/restricted-call f m))))))
+  (fnk-impl/positional-fn (lazy-compile g) arg-ks))
