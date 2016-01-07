@@ -205,6 +205,8 @@
   [{:keys [input-schema] :as model}]
   (s/schema-with-name input-schema (str (capitalize (:name model)) "In")))
 
+
+;; TODO we can generate this from the graph
 (defn ->output-schema
   "The output schema for a given entity"
   [entity]
@@ -217,6 +219,8 @@
 
       (s/schema-with-name (str (capitalize (:name entity)) "Out"))))
 
+
+;; TODO: maybe call this "invalid"
 (defn ->malformed?*
   "The malformed? database function for a given entity"
   [entity input-schema*]
@@ -231,7 +235,7 @@
 (defn ->malformed?
   "The `malformed?` function for a given entity"
   [{:keys [input-schema] :as model}]
-  (s/checker {}#_input-schema))
+  (s/checker input-schema))
 
 (defn ->exists?*
   "The `exists?` database function for a given entity"
