@@ -10,8 +10,7 @@
             [io.rkn.conformity :as c]
 
             [crustacean.schemas :refer [Entity]]
-            [crustacean.utils :refer [spit-edn]]
-            [crustacean.core :refer [->malformed?* ->exists?* ->create*]]))
+            [crustacean.utils :refer [spit-edn]]))
 
 
 (defn tx-markers
@@ -40,16 +39,16 @@
 
 (defn db-functions
   "The db functions we need for an entity"
-  [entity]
+  [model]
   [{:db/id (d/tempid :db.part/user)
-    :db/ident (keyword (:namespace entity) "malformed?")
-    :db/fn (->malformed?* entity)}
+    :db/ident (keyword (:namespace model) "malformed?")
+    :db/fn (get-in model [:db-funds :malformed?*])}
    {:db/id (d/tempid :db.part/user)
-    :db/ident (keyword (:namespace entity) "exists?")
-    :db/fn (->exists?* entity)}
+    :db/ident (keyword (:namespace model) "exists?")
+    :db/fn (get-in model [:db-funcs :exists?*])}
    {:db/id (d/tempid :db.part/user)
-    :db/ident (keyword (:namespace entity) "create")
-    :db/fn (->create* entity)}])
+    :db/ident (keyword (:namespace model) "create")
+    :db/fn (get-in model [:db-funcs :create*])}])
 
 (defn initial-txes
   "The txes we need when an entity is first created"
