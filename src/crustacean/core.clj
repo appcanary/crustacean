@@ -16,9 +16,9 @@
 ;; - add support for backrefs in composite keys
 
 
-;; ## The main macro
-
 (declare ->malformed? ->malformed?* ->exists? ->exists?* ->create ->create* ->find-by ->pull ->pull-many ->all-with ->find-or-create ->input-schema ->input-schema* ->output-schema ->graph)
+
+;; ## The main macro
 
 (defn defentity*
   "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defentity`"
@@ -28,12 +28,23 @@
                {}
                (for [[k & values] forms]
                  (case k
+                   ;; TODO: this will become migration-dir
                    :migration-file
                    [:migration-file (first values)]
 
+                   ;; TODO: get rid of this
                    :migration-version
                    [:migration-version (first values)]
 
+
+                   ;; A field is a vector containing the field name, type, and options, i.e.
+                   ;; [posts :ref :many :indexed]
+                   ;; The type may itself be a vector, that indicates the model used in a reference type, i.e.
+                   ;; [posts [:ref blog.post/post] :many :indexed]
+
+                   ;; Fields are stored as a map, the keys are (string) field names, and the values are vectors of the field type,
+                   ;; the set of options and (optionally) a string representing the referenced model
+                   ;; TODO: convert keys to keywords
                    :fields
                    [:fields (->> (for [[nm tp & opts] values]
                                    [(name nm)
@@ -42,16 +53,22 @@
                                       [tp (set opts)])])
                                  (into {}))]
 
+                   ;; Computed fields consist of a vector containing the field name and a fnk that computes it.
+                   ;; Computed fields are stored as a map, the keys are (string) field names, and the values are the fnks
                    :computed-fields
                    [:computed-fields (->> (for [[nm computed-field] values]
                                             [(name nm) computed-field])
                                           (into {}))]
 
+                   ;; Defaults consist of a vector containing the field name and a fn that computes it.
+                   ;; Defaults are stored as a map, the keys are (string) field names, and the values are the fns
                    :defaults
                    [:defaults (->> (for [[nm default] values]
                                      [(name nm) default])
                                    (into {}))]
 
+                   ;; Validators consist of a vector containing the field name and a fn or regular expression that computes it.
+                   ;; Validators are stored as a map, the keys are (string) field names, and the values are the fns or regular expressions
                    :validators
                    [:validators (->> (for [[nm validator] values]
                                        [(name nm) validator])
@@ -60,23 +77,39 @@
                    :composite-keys
                    [:composite-keys (mapv #(mapv keyword %) values)]
 
+
+                   ;; TODO: get rid of this
                    :views
                    [:views (apply hash-map values)]
 
+                   ;; Backrefs are a way of updating the parent when creating a
+                   ;; child. If you specify a backreference on a model, the
+                   ;; parent can be updated by a child. They
+                   ;; support :assignment-required or :assignment-permitted as
+                   ;; options.
                    :backrefs
                    [:backrefs (->> (for [[nm opt] values]
                                      [(keyword nm) opt])
                                    (into {}))]
 
+
+                   ;; Extra transactions to be transacted with a migration
+                   ;; TODO: these will get moved out of the model with better migrations
                    :extra-txes
                    [:extra-txes (first values)])))]
 
     (let [input-schema* (->input-schema* model)]
       (assoc model
+             ;; The next three fields are required by yuppiechef's datomic-schema
              :name (name nm)
              :basetype (keyword nm)
              :namespace (name nm)
+
+             ;; Input (prismatic) schema generated from the fields and validators on the model. We store it evaluated here
              :input-schema (eval input-schema*)
+
+             ;; We annotate the model with db funcs here so that the input-schema is evaled in the database and not outside of it.
+             ;; Note that the db-funcs take unevaluated schema
              :db-funcs {:malformed?* (->malformed?* model input-schema*)
                         :exists?* (->exists?* model)
                         :create* (->create* model)}))))
@@ -138,7 +171,7 @@
 
 (defn ->input-schema*
   "The syntactic representation of a prismatic schema for an input, generated from a given entity.
-  We return don't evaluate, and return syntax here because these
+  We return but don't evaluate, and return syntax here because these
   schemas are going to be inserted into datomic database functions,
   which are stored as unevaluated forms.
 
