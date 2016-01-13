@@ -40,7 +40,22 @@
              (:defaults model))))
     (testing "validators"
       (is (= '(fn [x] (> (count (name x)) 9))
-             ((:validators model) "field1"))))
+             ((:validators model) "field1"))))))
+
+(deftest test-wrap-db-funcs
+        (let [model (defentity* 'model
+                '((:migration-file "testdata/entity.edn")
+                  (:fields [field1 :keyword :unique-value :assignment-required]
+                           [field2 :string :unique-identity :assignment-permitted]
+                           [field3 :boolean :indexed :assignment-permitted]
+                           [field4 [:ref model2] :nohistory])
+                  (:computed-fields [computed-field1 (fn [field1] (name field1))])
+                  (:defaults [field3 (fn [] (= 1 1))]
+                             [field1 :hello])
+                  (:validators [field1 (fn [x] (> (count (name x)) 9))]
+                               [field2 #"hello"])))
+              model (wrap-db-funcs model)]
+
     (testing "input-schema"
       ;; Can't test this directly because it has compiled function objects for validators
       ;; no field4 since it's not assignment-permitted or assignment-required
