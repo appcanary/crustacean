@@ -379,7 +379,7 @@
   [model graph]
   (fn [db entity-id]
     (when entity-id
-      (graph {:e (delay (d/entity db entity-id)) :db db}))))
+      (graph {:e (d/entity db entity-id) :db db}))))
 
 (defn ->pull-many
   "The `pull-many` function for a given entity"
