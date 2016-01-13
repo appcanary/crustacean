@@ -8,7 +8,7 @@
 
                  [org.flatland/ordered "1.5.3"]
                  
-                 [com.datomic/datomic-free "0.9.5344"]
+                 [com.datomic/datomic-free "0.9.5327"]
                  [io.rkn/conformity "0.3.3" :exclusions [com.datomic/datomic-free]]
                  [datomic-schema "1.2.2"]
                  [potemkin "0.4.3"]]
