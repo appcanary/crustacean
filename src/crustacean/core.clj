@@ -341,12 +341,10 @@
 (defn ->graph
   "Given a model, compile a graph that given a db and a datomic entity outputs a lazy map representing the entity"
   [{fields :fields computed-fields :computed-fields ns :namespace :as model}]
-  (fn [e]
-    )
-  #_(graph/lazy-compile
+ (lazygraph/lazy-compile
    (let [computed-fields-graph (reduce
                                 (fn [result [field-name func]]
-                                  (assoc result (keyword field-name) (eval func)))
+                                  (assoc result (keyword field-name) func))
                                 ;; Start with the id field
                                 {:id (fnk [e] (:db/id e))}
                                 computed-fields)]
