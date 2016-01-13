@@ -131,6 +131,36 @@
 
   (is (= {} (->input-schema* {:backrefs {:field :not-a-thing}}))))
 
+(deftest test-generate-query
+  (let [model (defentity* 'model
+    '((:fields [str-field :string]
+               [bool-field :boolean])))]
+    ;; Handle queries with one param, no value
+    (let [query (generate-query model [[:str-field]])]
+      (is (= {:find [['?e '...]] :where [['?e :model/str-field]]} query)))
+    ;; Handle queries with one param, one value
+    (let [query (generate-query model [[:str-field "hi"]])
+          sym (second (:in query))]
+      (is (= {:find [['?e '...]] :in ['$ sym] :where [['?e :model/str-field sym]]} query)))
+
+    ;; Handle queries with multiple params
+    (let [query (generate-query model [[:str-field "hi"] [:bool-field true]])
+          sym1 (second (:in query))
+          sym2 (nth (:in query) 2)]
+      (is (= {:find [['?e '...]] :in ['$ sym1 sym2] :where [['?e :model/str-field sym1] ['?e :model/bool-field sym2]]} query)))
+
+    ;; Handle false in bool fields
+    (let [query (generate-query model [[:str-field "hi"] [:bool-field false]])
+          sym1 (second (:in query))
+          sym2 (nth (:in query) 2)]
+      (is (= {:find [['?e '...]] :in ['$ sym1 sym2] :where [['?e :model/str-field sym1] ['?e :model/bool-field sym2]]} query)))
+
+    ;; Handle backrefs
+    (let [query (generate-query model [[:str-field "hi"] [:other-model/_backref 123]])
+          sym1 (second (:in query))
+          sym2 (nth (:in query) 2)]
+      (is (= {:find [['?e '...]] :in ['$ sym1 sym2] :where [['?e :model/str-field sym1] [sym2 :other-model/backref '?e]]} query)))))
+
 ;; TODO test ->output-schema
 ;; TODO test ->malformed?*
 ;; TODO test ->malformed?

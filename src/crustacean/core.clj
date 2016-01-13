@@ -321,7 +321,7 @@
     (let [field-symbols (into {}
                               (for [[field value] arg-pairs]
                                 ;; Sometimes we have nil as a value, in that case we use '_ as the sym since we aren't binding the result
-                                [field (if value (gensym "?") '_)]))
+                                [field (if (nil? value ) '_ (gensym "?"))]))
 
           ;; Insert the symbols that correspond to the fields we're searching for, ignoring _'s
           in-clauses (into ['$] (remove #(= '_ %) (map second field-symbols)))
