@@ -42,7 +42,7 @@
   [model]
   [{:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "malformed?")
-    :db/fn (get-in model [:db-funds :malformed?*])}
+    :db/fn (get-in model [:db-funcs :malformed?*])}
    {:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "exists?")
     :db/fn (get-in model [:db-funcs :exists?*])}
