@@ -42,13 +42,13 @@
   [model]
   [{:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "malformed?")
-    :db/fn (get-in model [:db-funcs :malformed?*])}
+    :db/fn (d/function (read-string (get-in model [:db-funcs :malformed?*])))}
    {:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "exists?")
-    :db/fn (get-in model [:db-funcs :exists?*])}
+    :db/fn (d/function (read-string (get-in model [:db-funcs :exists?*])))}
    {:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "create")
-    :db/fn (get-in model [:db-funcs :create*])}])
+    :db/fn (d/function (read-string (get-in model [:db-funcs :create*])))}])
 
 (defn initial-txes
   "The txes we need when an entity is first created"
