@@ -40,33 +40,18 @@
              (:defaults model))))
     (testing "validators"
       (is (= '(fn [x] (> (count (name x)) 9))
-             ((:validators model) "field1"))))))
-
-(deftest test-wrap-db-funcs
-        (let [model (defentity* 'model
-                '((:migration-file "testdata/entity.edn")
-                  (:fields [field1 :keyword :unique-value :assignment-required]
-                           [field2 :string :unique-identity :assignment-permitted]
-                           [field3 :boolean :indexed :assignment-permitted]
-                           [field4 [:ref model2] :nohistory])
-                  (:computed-fields [computed-field1 (fn [field1] (name field1))])
-                  (:defaults [field3 (fn [] (= 1 1))]
-                             [field1 :hello])
-                  (:validators [field1 (fn [x] (> (count (name x)) 9))]
-                               [field2 #"hello"])))
-              model (wrap-db-funcs model)]
-
+             ((:validators model) "field1"))))
     (testing "input-schema"
       ;; Can't test this directly because it has compiled function objects for validators
       ;; no field4 since it's not assignment-permitted or assignment-required
-      (is (= #{:field1 (s/optional-key :field2) (s/optional-key :field3)}
+      (is (= #{:field1 `(s/optional-key :field2) `(s/optional-key :field3)}
              (set (keys (:input-schema model))))))
     (testing "db-funcs"
-      ;; Can't test this directly becuse they contain compiled db-funcs
+      ;; Can't test this directly becuse they contain compiled db-funcs as strings
       (let [db-funcs (:db-funcs model)]
-        (is (instance? datomic.function.Function (:create* db-funcs)))
-        (is (instance? datomic.function.Function (:malformed?* db-funcs)))
-        (is (instance? datomic.function.Function (:exists?* db-funcs)))))))
+        (is (instance? String (:create* db-funcs)))
+        (is (instance? String (:malformed?* db-funcs)))
+        (is (instance? String (:exists?* db-funcs)))))))
 
 
 (deftest test-field-spec->schema
