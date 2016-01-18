@@ -5,9 +5,7 @@
             :url "http://www.apache.org/licenses/LICENSE-2.0"}
   :dependencies [[prismatic/schema "1.0.4"]
                  [prismatic/plumbing "0.5.2"]
-
-                 [org.flatland/ordered "1.5.3"]
-                 
+                 [mvxcvi/puget "1.0.0"]
                  [com.datomic/datomic-free "0.9.5327"]
                  [io.rkn/conformity "0.3.3" :exclusions [com.datomic/datomic-free]]
                  [datomic-schema "1.2.2"]
