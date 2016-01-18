@@ -13,8 +13,9 @@
 
 
 (deftest test-defentity*
-  (let [model (defentity* 'model
-                '((:migration-file "testdata/entity.edn")
+  (let [model
+        (defentity* 'model
+                '((:migration-dir "testdata/entity.edn")
                   (:fields [field1 :keyword :unique-value :assignment-required]
                            [field2 :string :unique-identity :assignment-permitted]
                            [field3 :boolean :indexed :assignment-permitted]
@@ -24,7 +25,7 @@
                              [field1 :hello])
                   (:validators [field1 (fn [x] (> (count (name x)) 9))]
                                [field2 #"hello"])))]
-    (is (= (:migration-file model) "testdata/entity.edn"))
+    (is (= (:migration-dir model) "testdata/entity.edn"))
     (testing "fields"
       (let [fields (:fields model)]
         (is (= [:keyword #{:unique-value :assignment-required}] (fields "field1")))
@@ -147,9 +148,7 @@
       (is (= {:find [['?e '...]] :in ['$ sym1 sym2] :where [['?e :model/str-field sym1] [sym2 :other-model/backref '?e]]} query)))))
 
 ;; TODO test ->output-schema
-;; TODO test ->malformed?*
 ;; TODO test ->malformed?
-;; TODO test ->exists?*
 ;; TODO test ->create*
 ;; TODO test ->create
 ;; TODO test where-clauses

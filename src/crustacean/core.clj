@@ -7,6 +7,7 @@
             [clojure.string :refer [capitalize]]
 
             [crustacean.schemas :refer :all]
+            [crustacean.migrations :as migrations]
             [crustacean.lazygraph :as lazygraph]
             [crustacean.utils :refer [normalize-keys entity-exists? fields-with unique-fields remove-nils]])
   (:gen-class))
@@ -17,7 +18,7 @@
 ;; - add support for backrefs in composite keys
 
 
-(declare ->malformed? ->malformed?* ->exists? ->exists?* ->create ->create* ->find-by ->pull ->pull-many ->all-with ->find-or-create ->input-schema ->input-schema* ->output-schema ->graph)
+(declare ->malformed? ->exists? ->create  ->find-by ->pull ->pull-many ->all-with ->find-or-create ->input-schema ->input-schema* ->output-schema ->graph)
 
 ;; ## The main macro
 
@@ -31,14 +32,8 @@
                 :namespace (name nm)}
                (for [[k & values] forms]
                  (case k
-                   ;; TODO: this will become migration-dir
-                   :migration-file
-                   [:migration-file (first values)]
-
-                   ;; TODO: get rid of this
-                   :migration-version
-                   [:migration-version (first values)]
-
+                   :migration-dir
+                   [:migration-dir (first values)]
 
                    ;; A field is a vector containing the field name, type, and options, i.e.
                    ;; [posts :ref :many :indexed]
@@ -96,20 +91,20 @@
                                    (into {}))]
 
 
-                   ;; Extra transactions to be transacted with a migration
-                   ;; TODO: these will get moved out of the model with better migrations
-                   :extra-txes
-                   [:extra-txes (first values)])))
+                   ;; Db functions are functions that run in the transactor
+                   :db-functions
+                   [:db-functions (->> (for [[nm default] values]
+                                         [(name nm) default])
+                                       (into {}))])))
         input-schema* (->input-schema* model)]
     (assoc model
            ;; Input (prismatic) schema generated from the fields and validators on the model. We store it evaluated here
            :input-schema input-schema*
-           ;; We annotate the model with db funcs here so that the input-schema is evaled in the database and not outside of it.
 
-           ;; Note that the db-funcs take unevaluated schema
-           :db-funcs {:malformed?* (->malformed?* model input-schema*)
-                      :exists?* (->exists?* model)
-                      :create*  (->create* model)})))
+           ;; Values velow are saved as strings so they don't get evaluated when this macro is exapnded
+           :raw-input-schema (pr-str input-schema*)
+           :raw-defaults (pr-str (:defaults model))
+           :raw-validators (pr-str (:validators model)))))
 
 (defmacro defentity
   "Takes an entity specification in a friendly syntax and creates the entity, along with all of the requisite functions"
@@ -127,7 +122,10 @@
        ;; TODO these names suck
        (def ~'DBInputSchema (->input-schema ~nm)) ;; this is what we validate the db against
        (def ~'APIInputSchema (apply dissoc ~'DBInputSchema (keys (:backrefs ~nm)))) ;;this is what we validate the api against -- we allow backrefs
-       (def ~'OutputSchema (->output-schema ~nm))))
+       (def ~'OutputSchema (->output-schema ~nm))
+       ;; Add the model to dynamic var so we know to migrate it
+       (when (:migration-dir ~nm)
+         (alter-var-root #'migrations/*models* #(assoc % (str *ns* "/" ~(str nm)) ~nm)))))
 
 (defn field-spec->schema
   "Convert a field spec to a prismatic schema"
