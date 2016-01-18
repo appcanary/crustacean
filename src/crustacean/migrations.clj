@@ -17,7 +17,7 @@
 
 
 ;; A dynamic var to hold all the models as they are defined
-(def ^:dynamic *models* {})
+(defonce ^:dynamic *models* {})
 
 (defn serialize-model
   "Serialize the model when writing to a migration file"
