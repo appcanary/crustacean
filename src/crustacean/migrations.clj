@@ -7,7 +7,6 @@
             [clojure.data :as data]
             [datomic-schema.schema :as datomic-schema]
             [clojure.pprint :refer [pprint]]
-            [flatland.ordered.map :refer :all]
             [io.rkn.conformity :as c]
             [clojure.java.io :as io]
             [puget.printer :as puget]
