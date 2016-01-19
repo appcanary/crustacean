@@ -23,7 +23,7 @@
                           (for [[field# [type# opts#]] ~fields]
                             (let [namespaced-field#  (keyword ~(:namespace entity) field#)
 
-                                  defaults# ~(:defaults entity)
+                                  defaults# ~(read-string (:raw-defaults entity))
 
                                   val# (cond (opts# :assignment-required)
                                              (get input# (keyword field#))
