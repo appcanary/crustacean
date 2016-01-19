@@ -66,7 +66,7 @@
   "The db functions txes for a model"
   [{:keys[db-functions] :as model}]
   (for [[fn-name fn] db-functions]
-    {:db/id #db/id[:db.part/db]
+    {:db/id #db/id[:db.part/user]
      :db/ident (keyword (:namespace model) fn-name)
      :db/fn fn}))
 
