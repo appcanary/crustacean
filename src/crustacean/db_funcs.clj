@@ -1,6 +1,6 @@
 (ns crustacean.db-funcs
   (:require [datomic.api :as d]
-            [crustacean.utils :refer [normalize-keys entity-exists? fields-with unique-fields remove-nils]]))
+            [crustacean.utils :refer [entity-exists? fields-with unique-fields remove-nils]]))
 
 (defn create-fn
   "The `create` database function for a given entity"

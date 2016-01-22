@@ -1,15 +1,12 @@
 (ns crustacean.migrations
-  (:require [schema.core :as s]
-            [clojure.string :as string]
+  (:require [clojure.string :as string]
             [datomic.api :as d]
             [clojure.java.io :refer [as-file]]
-            [clojure.edn :as edn]
             [clojure.data :as data]
             [datomic-schema.schema :as datomic-schema]
             [clojure.pprint :refer [pprint]]
             [io.rkn.conformity :as c]
             [clojure.java.io :as io]
-            [puget.printer :as puget]
 
             [crustacean.db-funcs :as db-funcs]
             [crustacean.utils :refer [spit-edn unique-fields]]))

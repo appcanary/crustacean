@@ -2,14 +2,12 @@
   "This generates CRU functions complete with input validation"
   (:require [schema.core :as s]
             [plumbing.core :refer [fnk]]
-            [plumbing.graph :as graph]
             [datomic.api :as d]
             [clojure.string :refer [capitalize]]
 
-            [crustacean.schemas :refer :all]
             [crustacean.migrations :as migrations]
             [crustacean.lazygraph :as lazygraph]
-            [crustacean.utils :refer [normalize-keys entity-exists? fields-with unique-fields remove-nils]])
+            [crustacean.utils :refer [entity-exists? fields-with unique-fields remove-nils]])
   (:gen-class))
 
 ;; TODO

@@ -7,23 +7,14 @@
   (when (:db/id entity)
     entity))
 
+;; see below
 (defn normalize
   [k]
   (if (= (first (name k)) \_)
     (keyword (namespace k))
     (keyword (name k))))
 
-(defn entity-map
-  "If it's a Datomic entity map make sure we get the :db/id key
-
-  Datomic doesn't include this in (keys entity) for the entity API for some reason"
-  [x]
-  (cond (map? x)
-        x
-
-        (instance? datomic.query.EntityMap x)
-        (select-keys x (conj (keys x) :db/id))))
-
+;; TODO used once in canary artifact, remove soon
 (defn normalize-keys
   [mp]
   (if-let [mp (entity-map mp)]
