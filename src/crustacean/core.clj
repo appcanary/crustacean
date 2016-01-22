@@ -2,13 +2,12 @@
   "This generates CRU functions complete with input validation"
   (:require [schema.core :as s]
             [plumbing.core :refer [fnk]]
-            [plumbing.graph :as graph]
             [datomic.api :as d]
             [clojure.string :refer [capitalize]]
 
-            [crustacean.schemas :refer :all]
+            [crustacean.migrations :as migrations]
             [crustacean.lazygraph :as lazygraph]
-            [crustacean.utils :refer [normalize-keys entity-exists? fields-with unique-fields remove-nils]])
+            [crustacean.utils :refer [entity-exists? fields-with unique-fields remove-nils]])
   (:gen-class))
 
 ;; TODO
@@ -17,7 +16,7 @@
 ;; - add support for backrefs in composite keys
 
 
-(declare ->malformed? ->malformed?* ->exists? ->exists?* ->create ->create* ->find-by ->pull ->pull-many ->all-with ->find-or-create ->input-schema ->input-schema* ->output-schema ->graph)
+(declare ->malformed? ->exists? ->create  ->find-by ->pull ->pull-many ->all-with ->find-or-create ->input-schema ->input-schema* ->output-schema ->graph)
 
 ;; ## The main macro
 
@@ -31,14 +30,8 @@
                 :namespace (name nm)}
                (for [[k & values] forms]
                  (case k
-                   ;; TODO: this will become migration-dir
-                   :migration-file
-                   [:migration-file (first values)]
-
-                   ;; TODO: get rid of this
-                   :migration-version
-                   [:migration-version (first values)]
-
+                   :migration-dir
+                   [:migration-dir (first values)]
 
                    ;; A field is a vector containing the field name, type, and options, i.e.
                    ;; [posts :ref :many :indexed]
@@ -96,20 +89,21 @@
                                    (into {}))]
 
 
-                   ;; Extra transactions to be transacted with a migration
-                   ;; TODO: these will get moved out of the model with better migrations
-                   :extra-txes
-                   [:extra-txes (first values)])))
+                   ;; Db functions are functions that run in the transactor
+                   :db-functions
+                   [:db-functions (->> (for [[nm default] values]
+                                         [(name nm) default])
+                                       (into {}))])))
         input-schema* (->input-schema* model)]
     (assoc model
            ;; Input (prismatic) schema generated from the fields and validators on the model. We store it evaluated here
            :input-schema input-schema*
-           ;; We annotate the model with db funcs here so that the input-schema is evaled in the database and not outside of it.
 
-           ;; Note that the db-funcs take unevaluated schema
-           :db-funcs {:malformed?* (->malformed?* model input-schema*)
-                      :exists?* (->exists?* model)
-                      :create*  (->create* model)})))
+           ;; Values below are saved as strings so they don't get evaluated when this macro is expanded
+           ;; Otherwise they're written as raw functions 'objects' at macro expansion time
+           :raw-input-schema (pr-str input-schema*)
+           :raw-defaults (pr-str (:defaults model))
+           :raw-validators (pr-str (:validators model)))))
 
 (defmacro defentity
   "Takes an entity specification in a friendly syntax and creates the entity, along with all of the requisite functions"
@@ -127,7 +121,10 @@
        ;; TODO these names suck
        (def ~'DBInputSchema (->input-schema ~nm)) ;; this is what we validate the db against
        (def ~'APIInputSchema (apply dissoc ~'DBInputSchema (keys (:backrefs ~nm)))) ;;this is what we validate the api against -- we allow backrefs
-       (def ~'OutputSchema (->output-schema ~nm))))
+       (def ~'OutputSchema (->output-schema ~nm))
+       ;; Add the model to dynamic var so we know to migrate it when we run sync-all-models
+       (when (:migration-dir ~nm)
+         (alter-var-root #'migrations/*models* #(assoc % (str *ns* "/" ~(str nm)) ~nm)))))
 
 (defn field-spec->schema
   "Convert a field spec to a prismatic schema"
@@ -206,40 +203,10 @@
 
 
 ;; TODO: maybe call this "invalid"
-(defn ->malformed?*
-  "The malformed? database function for a given entity"
-  [entity input-schema*]
-  (pr-str `{:lang :clojure
-            :requires [[schema.core]]
-            :params [input#]
-            :code (let [checker#  (schema.core/checker (eval ~input-schema*))]
-                    (checker# input#))}))
-
-
 (defn ->malformed?
   "The `malformed?` function for a given entity"
   [{:keys [input-schema] :as model}]
   (s/checker input-schema))
-
-(defn ->exists?*
-  "The `exists?` database function for a given entity"
-  [entity]
-  (pr-str `{:lang :clojure
-            :params [db# input#]
-            :code (let [unique-key-pairs# (->> [~@(unique-fields entity)]
-                                               (filter #(contains? input# (keyword %)))
-                                               (map (juxt #(keyword ~(:namespace entity) %) #(get input# (keyword %)))))
-
-                        composite-key-pairs# (->> ~(:composite-keys entity)
-                                                  (filter (fn [[a# b#]] (and (contains? input# a#) (contains? input# b#))))
-                                                  (map (fn [[a# b#]]
-                                                         [(keyword ~(:namespace entity) (name a#)) (get input# a#)
-                                                          (keyword ~(:namespace entity) (name b#)) (get input# b#)])))]
-                    (seq (concat
-                          (d/q {:find '[[~'?e ...]] :in '[~'$ [[~'?attr ~'?value]]] :where '[[~'?e ~'?attr ~'?value]]} db# unique-key-pairs#)
-                          (mapcat (fn [[attr1# value1# attr2# value2#]]
-                                    (d/q {:find '[[~'?e ...]] :in '[~'$ ~'?value1 ~'?value2] :where `[[~'~'?e ~attr1# ~'~'?value1] [~'~'?e  ~attr2# ~'~'?value2]]} db# value1# value2#))
-                                  composite-key-pairs#))))}))
 
 (defn ->exists?
   "The `exits?` function for a given entity"
@@ -249,46 +216,7 @@
 
 ;; Entity Creation
 
-(defn ->create*
-  "The `create` database function for a given entity"
-  [entity]
-  (let [fields (:fields entity)
-        defaults (:defaults entity)
-        backrefs (:backrefs entity)]
-    (pr-str `{:lang :clojure
-              :params [db# id# input#]
-              :code
-              (if-let [malformed# (d/invoke db# (keyword ~(:namespace entity) "malformed?") input#)]
-                (throw (IllegalArgumentException. (str malformed#)))
 
-                (if (d/invoke db# (keyword ~(:namespace entity) "exists?") db# input#)
-                  (throw (IllegalStateException. "entity already exists"))
-
-                  (vector (into {:db/id id#}
-                                (concat
-                                 (for [[field# [type# opts#]] ~fields]
-                                   (let [namespaced-field#  (keyword ~(:namespace entity) field#)
-
-                                         defaults# ~(:defaults entity)
-
-                                         val# (cond (opts# :assignment-required)
-                                                    (get input# (keyword field#))
-
-                                                    (and (opts# :assignment-permitted) (contains? input# (keyword field#)))
-                                                    (get input# (keyword field#))
-
-                                                    (contains? defaults# field#)
-                                                    (let [default# (get defaults# field#)]
-                                                      (if (fn? default#)
-                                                        (default#)
-                                                        default#)))]
-                                     (when (not (nil? val#))
-                                       [namespaced-field# val#])))
-                                 (for [field# (keys ~backrefs)]
-                                   (when-let [val# (get input# field#)]
-                                     [field# val#]))))
-                          [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace entity) "txCreated") id#] ;;annotate the transactionx
-                          )))})))
 (defn ->create
   "The `create!` function for a given entity"
   [entity pull]

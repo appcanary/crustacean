@@ -13,8 +13,9 @@
 
 
 (deftest test-defentity*
-  (let [model (defentity* 'model
-                '((:migration-file "testdata/entity.edn")
+  (let [model
+        (defentity* 'model
+                '((:migration-dir "testdata/entity.edn")
                   (:fields [field1 :keyword :unique-value :assignment-required]
                            [field2 :string :unique-identity :assignment-permitted]
                            [field3 :boolean :indexed :assignment-permitted]
@@ -24,7 +25,7 @@
                              [field1 :hello])
                   (:validators [field1 (fn [x] (> (count (name x)) 9))]
                                [field2 #"hello"])))]
-    (is (= (:migration-file model) "testdata/entity.edn"))
+    (is (= (:migration-dir model) "testdata/entity.edn"))
     (testing "fields"
       (let [fields (:fields model)]
         (is (= [:keyword #{:unique-value :assignment-required}] (fields "field1")))
@@ -46,12 +47,13 @@
       ;; no field4 since it's not assignment-permitted or assignment-required
       (is (= #{:field1 `(s/optional-key :field2) `(s/optional-key :field3)}
              (set (keys (:input-schema model))))))
-    (testing "db-funcs"
-      ;; Can't test this directly becuse they contain compiled db-funcs as strings
-      (let [db-funcs (:db-funcs model)]
-        (is (instance? String (:create* db-funcs)))
-        (is (instance? String (:malformed?* db-funcs)))
-        (is (instance? String (:exists?* db-funcs)))))))
+
+    (testing "raw-input-schema"
+      (is (= "{(schema.core/optional-key :field2) (schema.core/both schema.core/Str #\"hello\"), (schema.core/optional-key :field3) schema.core/Bool, :field1 (schema.core/both schema.core/Keyword (schema.core/pred (fn [x] (> (count (name x)) 9))))}" (:raw-input-schema model))))
+    (testing "raw-defaults"
+      (is (= "{\"field3\" (fn [] (= 1 1)), \"field1\" :hello}" (:raw-defaults model))))
+    (testing "raw-validators"
+      (is (= "{\"field1\" (fn [x] (> (count (name x)) 9)), \"field2\" #\"hello\"}" (:raw-validators model))))))
 
 
 (deftest test-field-spec->schema
@@ -147,9 +149,7 @@
       (is (= {:find [['?e '...]] :in ['$ sym1 sym2] :where [['?e :model/str-field sym1] [sym2 :other-model/backref '?e]]} query)))))
 
 ;; TODO test ->output-schema
-;; TODO test ->malformed?*
 ;; TODO test ->malformed?
-;; TODO test ->exists?*
 ;; TODO test ->create*
 ;; TODO test ->create
 ;; TODO test where-clauses
