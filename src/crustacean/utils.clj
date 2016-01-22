@@ -7,14 +7,26 @@
   (when (:db/id entity)
     entity))
 
-;; see below
+;; only used in norm-keys
 (defn normalize
   [k]
   (if (= (first (name k)) \_)
     (keyword (namespace k))
     (keyword (name k))))
 
-;; TODO used once in canary artifact, remove soon
+;; see below
+(defn entity-map
+  "If it's a Datomic entity map make sure we get the :db/id key
+
+  Datomic doesn't include this in (keys entity) for the entity API for some reason"
+  [x]
+  (cond (map? x)
+        x
+
+        (instance? datomic.query.EntityMap x)
+        (select-keys x (conj (keys x) :db/id))))
+
+;; TODO: we use this in canary artifact, otherwise dead code
 (defn normalize-keys
   [mp]
   (if-let [mp (entity-map mp)]
