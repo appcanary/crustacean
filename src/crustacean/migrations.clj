@@ -13,18 +13,23 @@
 
             [crustacean.db-funcs :as db-funcs]
             [crustacean.utils :refer [spit-edn unique-fields]]))
-
+;; USAGE
+;; new-migration for when your model has changed
+;; sync-model or sync-all-models to get your db up to speed
 
 ;; A dynamic var to hold all the models as they are defined
 (defonce ^:dynamic *models* {})
 
-(defn serialize-model
+(defn model->edn
   "Serialize the model when writing to a migration file"
   [model]
   (-> (select-keys model [:name :fields :db-functions])
       (assoc :defaults (read-string (:raw-defaults model))
              :validators (read-string (:raw-validators model)))))
 
+;; We tag transactions that create/update/delete an entity
+;; TODO txUpdated and txDeleted aren't fully implemented
+;; you can use them yourself when transacting 'raw' datomic
 (defn tx-markers
   "Transaction for an model's txMarkers"
   [model]
@@ -49,8 +54,8 @@
     :db/index true
     :db.install/_attribute :db.part/db}])
 
-(defn automated-db-functions
-  "The automatically generated db functions for a model, exists?, create, and malformed?"
+(defn default-db-functions
+  "The default db functions for a model: exists?, create, and malformed?"
   [model]
   [{:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "exists?")
@@ -76,65 +81,73 @@
   (concat (tx-markers model)
           (datomic-schema/generate-schema d/tempid [model])
           (db-functions-txes model)
-          (automated-db-functions model)))
+          (default-db-functions model)))
 
 
 (defn migration-txes
   "Generate the txes needed to go from the last migration to the new model"
   [last-migration model]
   (let [old-model (:model last-migration)
-        new-model (serialize-model model)
+        new-model (model->edn model)
         nm (:name model)]
-    (if
-      ;; We compare the printed representation because validators can have regular expressions and
-      ;; (= #"*" #"*") is false. Representing as a string circumvents that.
-      (= (pr-str old-model) (pr-str new-model))
+
+    ;; We compare the printed representation because validators can have regular expressions and
+    ;; (= #"*" #"*") is false. Representing as a string circumvents that.
+    (if (= (pr-str old-model) (pr-str new-model))
       (do (println "Nothing to migrate, generating empty migration")
           [])
 
       ;; Otherwise we generate migrations we need
       (concat
-       ;; If the fields are different we have to create or delete fields
-       (when (not= (:fields old-model) (:fields new-model))
-         (let [[added-fields deleted-fields common-fields] (data/diff (set (keys (:fields new-model))) (set  (keys (:fields old-model))))]
-           (println "Generating migrations for modified fields")
-           ;; Special case if we add and delete only one field and it's the same type --- we rename the field
-           (if (and (= 1 (count added-fields))
-                    (= 1 (count deleted-fields))
-                    (= (get new-model (first added-fields)) (get old-model (first deleted-fields))))
-             [{:db/id (keyword nm (first deleted-fields))
-               :db/ident (keyword nm (first added-fields))}]
+        ;; If the fields are different we have to create or delete fields
+        (when (not= (:fields old-model) (:fields new-model))
+          (let [[added-fields deleted-fields common-fields] (data/diff (set (keys (:fields new-model))) (set  (keys (:fields old-model))))]
+            (println "Generating migrations for modified fields")
+            ;; Special case if we add and delete only one field and it's the same type --- we rename the field
+            (if (and (= 1 (count added-fields))
+                     (= 1 (count deleted-fields))
+                     (= (get new-model (first added-fields)) (get old-model (first deleted-fields))))
+              (do
+                (println "Renaming " (first deleted-fields) "to" (first added-fields))
+                [{:db/id    (keyword nm (first deleted-fields))
+                  :db/ident (keyword nm (first added-fields))}])
 
-             ;; Otherwise generate created and deleted fields
-             (concat   ;; TODO: figure out if we modified any properties of existing fields
-              ;; Add new fields
-              (datomic-schema/generate-schema d/tempid [(assoc model :fields (select-keys (:fields new-model) added-fields))])
+              ;; Otherwise generate created and deleted fields
+              ;; If you change the property of an existing field such as cardinality or history
+              ;; you have to write the schema alteration yourself http://docs.datomic.com/schema.html#Schema-Alteration
+              (concat   ;; TODO: figure out if we modified any properties of existing fields
+                ;; Add new fields
+                (datomic-schema/generate-schema d/tempid [(assoc model :fields (select-keys (:fields new-model) added-fields))])
 
-              ;; Delete fields
-              (for [field deleted-fields]
-                {:db/id (keyword nm (first deleted-fields))
-                 :db/ident (keyword "unused" (str nm "/" field))})))))
+                ;; Delete fields
+                ;; You can't delete fields in datomic, so we move them to the :unused namespace
+                ;; TODO what happens when you delete something with the same name 2x?
+                (for [field deleted-fields]
+                  {:db/id (keyword nm (first deleted-fields))
+                   :db/ident (keyword "unused" (str nm "/" field))})))))
 
-       ;; Compare with pr-str because database functions are objects
-       (when (not= (pr-str (:db-functions old-model)) (pr-str (:db-functions new-model)))
-         (println "Generating migrations for modified database-functions")
-         (db-functions-txes model))
+        ;; if db-funs have changed, regenerate them
+        ;; Compare with pr-str because database functions are objects
+        (when (not= (pr-str (:db-functions old-model)) (pr-str (:db-functions new-model)))
+          (println "Generating migrations for modified database-functions")
+          (db-functions-txes model))
 
-       (when (or (not= (:fields old-model) (:fields new-model))
-                 (not= (pr-str (:validators old-model)) (pr-str (:validators new-model)))
-                 (not= (pr-str (:defaults old-model)) (pr-str (:defaults new-model))))
-         (println "Generating migrations for automatically generated database functions")
-         (automated-db-functions model))))))
+        ;; if the fields, or validators, or default values have changed
+        ;; regenerate the default-db-functions
+        (when (or (not= (:fields old-model) (:fields new-model))
+                  (not= (pr-str (:validators old-model)) (pr-str (:validators new-model)))
+                  (not= (pr-str (:defaults old-model)) (pr-str (:defaults new-model))))
+          (println "Generating migrations for default database functions")
+          (default-db-functions model))))))
 
 (defn get-migrations
-  "Retrieve an model's migrations"
+  "Retrieve an model's migrations, returns map {modelname-date {:model model :txes [...]}}"
   [{:keys [migration-dir] :as model}]
 
   (let [migrations (some-> migration-dir io/resource io/file file-seq)
         ;; The first value in migrations is the parent directory itself because
         ;; of how `file-seq` works
-        migrations (drop 1 migrations)
-        ]
+        migrations (drop 1 migrations)]
     (into {}
           (for [migration-file migrations]
             (let [base-name (get (string/split (.getName migration-file) #"\.") 0) ;; Drop the .edn extension
@@ -155,14 +168,17 @@
   [{:keys [migration-dir] :as model}]
   (when (nil? migration-dir)
     (throw (Exception. (str (:name model) " has no migration directory"))))
-  (let [serialized-model (serialize-model model) ; we only write a part of the model to the migrations
+
+  (let [serialized-model (model->edn model) ; we only write a part of the model to the migrations
         migration-path (io/file "resources" migration-dir (migration-filename))
         migrations (get-migrations model)
         ;; Maps don't maintain insertion order, so make sure we get the last migration.
         last-migration (get migrations (last (sort (keys migrations))))]
+
     ;; Make the migration dir in case it doesn't exist
     (println "Writing new migration to" (.getPath migration-path))
     (io/make-parents migration-path)
+
     ;; If we have a previous migration, compute the diff for the txes, otherwise just use the initial txes
     (if last-migration
       (spit-edn migration-path {:model serialized-model
@@ -175,8 +191,10 @@
   [conn model & [model-var]]
   (let [migrations (get-migrations model)
         [_ {last-model :model}] (last migrations)]
+
     (when-not (= (:fields last-model) (:fields model))
       (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (or model-var (:name model)) "`"))))
+
     (c/ensure-conforms conn migrations)))
 
 (defn sync-all-models

@@ -7,8 +7,8 @@
 (defn last-migration
   "Given a model spit out a plausible last migration for it"
   [model]
-  {:model (serialize-model model)
-   :txes [(initial-txes model)]})
+  {:model (model->edn model)
+   :txes  [(initial-txes model)]})
 
 (deftest test-migration-txes
   (let [model (defentity* 'model

@@ -101,7 +101,8 @@
            ;; Input (prismatic) schema generated from the fields and validators on the model. We store it evaluated here
            :input-schema input-schema*
 
-           ;; Values velow are saved as strings so they don't get evaluated when this macro is exapnded
+           ;; Values below are saved as strings so they don't get evaluated when this macro is expanded
+           ;; Otherwise they're written as raw functions 'objects' at macro expansion time
            :raw-input-schema (pr-str input-schema*)
            :raw-defaults (pr-str (:defaults model))
            :raw-validators (pr-str (:validators model)))))
@@ -123,7 +124,7 @@
        (def ~'DBInputSchema (->input-schema ~nm)) ;; this is what we validate the db against
        (def ~'APIInputSchema (apply dissoc ~'DBInputSchema (keys (:backrefs ~nm)))) ;;this is what we validate the api against -- we allow backrefs
        (def ~'OutputSchema (->output-schema ~nm))
-       ;; Add the model to dynamic var so we know to migrate it
+       ;; Add the model to dynamic var so we know to migrate it when we run sync-all-models
        (when (:migration-dir ~nm)
          (alter-var-root #'migrations/*models* #(assoc % (str *ns* "/" ~(str nm)) ~nm)))))
 
