@@ -6,7 +6,7 @@
   :dependencies [[prismatic/schema "1.0.4"]
                  [prismatic/plumbing "0.5.2"]
                  [mvxcvi/puget "1.0.0"]
-                 [com.datomic/datomic-free "0.9.5327"]
+                 [com.datomic/datomic-free "0.9.5327" :exclusions [joda-time]]
                  [io.rkn/conformity "0.3.3" :exclusions [com.datomic/datomic-free]]
                  [datomic-schema "1.2.2"]
                  [potemkin "0.4.3"]
