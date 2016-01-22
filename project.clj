@@ -1,4 +1,4 @@
-(defproject appcanary/crustacean "0.1.7-SNAPSHOT"
+(defproject appcanary/crustacean "0.1.8-SNAPSHOT"
   :description "CRU operations & migrations for datomic"
   :url "http://example.com/FIXME"
   :license {:name "Apache License Version 2.0"
