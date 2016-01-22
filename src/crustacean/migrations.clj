@@ -7,6 +7,7 @@
             [clojure.pprint :refer [pprint]]
             [io.rkn.conformity :as c]
             [clojure.java.io :as io]
+            [cpath-clj.core :as cp]
 
             [crustacean.db-funcs :as db-funcs]
             [crustacean.utils :refer [spit-edn unique-fields]]))
@@ -141,15 +142,12 @@
   "Retrieve an model's migrations, returns map {modelname-date {:model model :txes [...]}}"
   [{:keys [migration-dir] :as model}]
 
-  (let [migrations (some-> migration-dir io/resource io/file file-seq)
-        ;; The first value in migrations is the parent directory itself because
-        ;; of how `file-seq` works
-        migrations (drop 1 migrations)]
+  (let [migrations (cp/resources migration-dir)]
     (into {}
-          (for [migration-file migrations]
-            (let [base-name (get (string/split (.getName migration-file) #"\.") 0) ;; Drop the .edn extension
+          (for [[filename [uri]] migrations]
+            (let [[_ base-name] (re-matches #"/(.*)\.edn" filename)  ;; Drop the starting / and the .edn extension
                   k (str (:name model) "-" base-name)]
-              [k (read-string  (slurp migration-file))])))))
+              [k (read-string  (slurp uri))])))))
 
 (defn migration-filename
   "Returns a filename using today's date"

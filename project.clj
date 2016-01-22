@@ -9,7 +9,8 @@
                  [com.datomic/datomic-free "0.9.5327"]
                  [io.rkn/conformity "0.3.3" :exclusions [com.datomic/datomic-free]]
                  [datomic-schema "1.2.2"]
-                 [potemkin "0.4.3"]]
+                 [potemkin "0.4.3"]
+                 [cpath-clj "0.1.2"]]
   :profiles {:repl {:main user}
              :1.7 {:dependencies [[org.clojure/clojure "1.7.0"]]}
              :1.8 {:dependencies [[org.clojure/clojure "1.8.0-RC4"]]}
