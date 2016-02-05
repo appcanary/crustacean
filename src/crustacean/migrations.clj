@@ -144,7 +144,7 @@
 
   (let [migrations (cp/resources migration-dir)]
     (into {}
-          (for [[filename [uri]] migrations]
+          (for [[filename [uri]] migrations :when (re-matches #"^.*\.edn$" filename)]
             (let [[_ base-name] (re-matches #"/?(.*)\.edn" filename)  ;; Drop the starting / (if there) and the .edn extension
                   k (str (:name model) "-" base-name)]
               [k (read-string  (slurp uri))])))))
