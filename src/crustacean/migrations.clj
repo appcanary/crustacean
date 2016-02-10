@@ -188,8 +188,8 @@
 
     (when-not (= (:fields last-model) (:fields model))
       (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (or model-var (:name model)) "`"))))
-
-    (c/ensure-conforms conn migrations)))
+    (doseq [[migration-name migration] migrations]
+      (c/ensure-conforms conn {migration-name migration}))))
 
 (defn sync-all-models
   "Syncs all the models we know about (in *models*)"
