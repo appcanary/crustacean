@@ -166,8 +166,7 @@
   (let [serialized-model (model->edn model) ; we only write a part of the model to the migrations
         migration-path (io/file "resources" migration-dir (migration-filename))
         migrations (get-migrations model)
-        ;; Maps don't maintain insertion order, so make sure we get the last migration.
-        last-migration (last migrations)]
+        last-migration (second (last migrations))]
 
     ;; Make the migration dir in case it doesn't exist
     (println "Writing new migration to" (.getPath migration-path))
