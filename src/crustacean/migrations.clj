@@ -142,12 +142,11 @@
   "Retrieve an model's migrations, returns map {modelname-date {:model model :txes [...]}}"
   [{:keys [migration-dir] :as model}]
 
-  (let [migrations (cp/resources migration-dir)]
-    (into {}
-          (for [[filename [uri]] migrations :when (re-matches #"^.*\.edn$" filename)]
-            (let [[_ base-name] (re-matches #"/?(.*)\.edn" filename)  ;; Drop the starting / (if there) and the .edn extension
-                  k (str (:name model) "-" base-name)]
-              [k (read-string  (slurp uri))])))))
+  (let [migrations (sort-by first (cp/resources migration-dir))]
+    (for [[filename [uri]] migrations :when (re-matches #"^.*\.edn$" filename)]
+      (let [[_ base-name] (re-matches #"/?(.*)\.edn" filename)  ;; Drop the starting / (if there) and the .edn extension
+            k (str (:name model) "-" base-name)]
+        [k (read-string  (slurp uri))]))))
 
 (defn migration-filename
   "Returns a filename using today's date"
@@ -168,7 +167,7 @@
         migration-path (io/file "resources" migration-dir (migration-filename))
         migrations (get-migrations model)
         ;; Maps don't maintain insertion order, so make sure we get the last migration.
-        last-migration (get migrations (last (sort (keys migrations))))]
+        last-migration (last migrations)]
 
     ;; Make the migration dir in case it doesn't exist
     (println "Writing new migration to" (.getPath migration-path))
