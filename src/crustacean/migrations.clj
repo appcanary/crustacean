@@ -157,10 +157,8 @@
 (defn migration-filename
   "Returns a filename using today's date"
   []
-  (-> ;; Format date (in UTC)
-   
-   (.format (java.util.Date.))
-   (str  ".edn")))
+  ;; Format date (in UTC)
+  (str (.format date-format (java.util.Date.)) ".edn"))
 
 (defn new-migration
   "Write a new migration for a model"
