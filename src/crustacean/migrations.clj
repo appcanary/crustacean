@@ -159,18 +159,20 @@
 
 (defn migration-filename
   "Returns a filename using today's date"
-  []
-  ;; Format date (in UTC)
-  (str (.format date-format (java.util.Date.)) ".edn"))
+  [migration-name]
+  (let [date (.format date-format (java.util.Date.))]
+    (if migration-name
+      (str date ".edn")
+      (str date "-" migration-name ".edn"))))
 
 (defn new-migration
   "Write a new migration for a model"
-  [{:keys [migration-dir] :as model}]
+  [{:keys [migration-dir] :as model} & [migration-name]]
   (when (nil? migration-dir)
     (throw (Exception. (str (:name model) " has no migration directory"))))
 
   (let [serialized-model (model->edn model) ; we only write a part of the model to the migrations
-        migration-path (io/file "resources" migration-dir (migration-filename))
+        migration-path (io/file "resources" migration-dir (migration-filename migration-name))
         migrations (get-migrations model)
         last-migration (second (last migrations))]
 
