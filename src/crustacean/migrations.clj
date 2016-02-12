@@ -163,8 +163,8 @@
   [migration-name]
   (let [date (.format date-format (java.util.Date.))]
     (if migration-name
-      (str date ".edn")
-      (str date "-" migration-name ".edn"))))
+      (str date "-" migration-name ".edn")
+      (str date ".edn"))))
 
 (defn new-migration
   "Write a new migration for a model"
