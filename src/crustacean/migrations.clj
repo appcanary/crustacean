@@ -68,7 +68,10 @@
     :db/fn (db-funcs/malformed-fn model)}
    {:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "create")
-    :db/fn (db-funcs/create-fn model)}])
+    :db/fn (db-funcs/create-fn model)}
+   {:db/id (d/tempid :db.part/user)
+    :db/ident (keyword (:namespace model) "upsert")
+    :db/fn (db-funcs/upsert-fn model)}])
 
 (defn db-functions-txes
   "The db functions txes for a model"

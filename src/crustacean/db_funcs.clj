@@ -2,47 +2,73 @@
   (:require [datomic.api :as d]
             [crustacean.utils :refer [entity-exists? fields-with unique-fields remove-nils]]))
 
+
+(defn generate-tx-map
+  "Generates a tx map for a crustacean model. Assumes symbols 'db 'id and 'input are available"
+  [model]
+  `(into {:db/id ~'id}
+         (concat
+          (for [[field# [type# opts#]] ~(:fields model)]
+            (let [namespaced-field#  (keyword ~(:namespace model) field#)
+
+                  defaults# ~(read-string (:raw-defaults model))
+
+                  val# (cond (opts# :assignment-required)
+                             (get ~'input (keyword field#))
+
+                             (and (opts# :assignment-permitted) (contains? ~'input (keyword field#)))
+                             (get ~'input (keyword field#))
+
+                             (contains? defaults# field#)
+                             (let [default# (get defaults# field#)]
+                               (if (fn? default#)
+                                 (default# ~'db ~'input)
+                                 default#)))]
+              (when (not (nil? val#))
+                [namespaced-field# val#])))
+          (for [field# (keys ~(:backrefs model))]
+            (when-let [val# (get ~'input field#)]
+              [field# val#])))))
+
 (defn create-fn
   "The `create` database function for a given entity"
   [entity]
-  (let [fields (:fields entity)
-        defaults (read-string (:raw-defaults entity))
-        backrefs (:backrefs entity)]
     (d/function
      `{:lang :clojure
-       :params [db# id# input#]
+       :params [~'db ~'id ~'input]
        :code
-       (if-let [malformed# (d/invoke db# (keyword ~(:namespace entity) "malformed?") input#)]
+       (if-let [malformed# (d/invoke ~'db (keyword ~(:namespace entity) "malformed?") ~'input)]
          (throw (IllegalArgumentException. (str malformed#)))
 
-         (if (d/invoke db# (keyword ~(:namespace entity) "exists?") db# input#)
+         (if (d/invoke ~'db (keyword ~(:namespace entity) "exists?") ~'db ~'input)
            (throw (IllegalStateException. "entity already exists"))
 
-           (vector (into {:db/id id#}
-                         (concat
-                          (for [[field# [type# opts#]] ~fields]
-                            (let [namespaced-field#  (keyword ~(:namespace entity) field#)
+           (vector
+            ~(generate-tx-map entity)
+            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace entity) "txCreated") ~'id] ;;annotate the transactionx
+            )))}))
 
-                                  defaults# ~(read-string (:raw-defaults entity))
+(defn upsert-fn
+  "The `upsert` database function for the model"
+  [model]
+  (d/function
+   `{:lang :clojure
+     :params [~'db ~'id ~'input]
+     :code
+     (if-let [malformed# (d/invoke ~'db (keyword ~(:namespace model) "malformed?") ~'input)]
+        (throw (IllegalArgumentException. (str malformed#)))
 
-                                  val# (cond (opts# :assignment-required)
-                                             (get input# (keyword field#))
+        (if (d/invoke ~'db (keyword ~(:namespace model) "exists?") ~'db ~'input)
+          (vector
+           ~(generate-tx-map model)
+           [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txUpdated") ~'id] ;;annotate the transaction
+           )
+           (vector
+            ~(generate-tx-map model)
+            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txCreated") ~'id] ;;annotate the transaction
+            )
+          ))}))
 
-                                             (and (opts# :assignment-permitted) (contains? input# (keyword field#)))
-                                             (get input# (keyword field#))
-
-                                             (contains? defaults# field#)
-                                             (let [default# (get defaults# field#)]
-                                               (if (fn? default#)
-                                                 (default# db# input#)
-                                                 default#)))]
-                              (when (not (nil? val#))
-                                [namespaced-field# val#])))
-                          (for [field# (keys ~backrefs)]
-                            (when-let [val# (get input# field#)]
-                              [field# val#]))))
-                   [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace entity) "txCreated") id#] ;;annotate the transactionx
-                   )))})))
 (defn exists-fn
   "The `exists?` database function for a given entity"
   [entity]
