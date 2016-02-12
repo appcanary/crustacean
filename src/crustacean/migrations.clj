@@ -99,7 +99,7 @@
 
     ;; We compare the printed representation because validators can have regular expressions and
     ;; (= #"*" #"*") is false. Representing as a string circumvents that.
-    (if (= (pr-str old-model) (pr-str new-model))
+    (if (and (= (pr-str old-model) (pr-str new-model)) (not regenerate-dbfuncs?))
       (do (println "Nothing to migrate, generating empty migration")
           [])
 
