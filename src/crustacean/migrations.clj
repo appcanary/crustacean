@@ -171,9 +171,9 @@
 (defn new-migration
   "Write a new migration for a model"
   ([model]
-   (new-migration nil false))
+   (new-migration model nil false))
   ([model migration-name]
-   (new-migration migration-name false))
+   (new-migration model migration-name false))
   ([{:keys [migration-dir] :as model} migration-name regenerate-dbfuncs?]
    (when (nil? migration-dir)
      (throw (Exception. (str (:name model) " has no migration directory"))))

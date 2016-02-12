@@ -21,7 +21,7 @@
                               (and (opts# :assignment-permitted) (contains? ~'input (keyword field#)))
                               (get ~'input (keyword field#))
 
-                              (and include-defaults? (contains? defaults# field#))
+                              (and ~include-defaults? (contains? defaults# field#))
                               (let [default# (get defaults# field#)]
                                 (if (fn? default#)
                                   (default# ~'db ~'input)
