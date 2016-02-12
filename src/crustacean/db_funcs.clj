@@ -4,31 +4,33 @@
 
 
 (defn generate-tx-map
-  "Generates a tx map for a crustacean model. Assumes symbols 'db 'id and 'input are available"
-  [model]
-  `(into {:db/id ~'id}
-         (concat
-          (for [[field# [type# opts#]] ~(:fields model)]
-            (let [namespaced-field#  (keyword ~(:namespace model) field#)
+  "Generates a tx map for a crustacean model. Assumes symbols 'db 'id and 'input are available. Optionally specify whether to include default values or not"
+  ([model]
+   (generate-tx-map model true))
+  ([model include-defaults?]
+   `(into {:db/id ~'id}
+          (concat
+           (for [[field# [type# opts#]] ~(:fields model)]
+             (let [namespaced-field#  (keyword ~(:namespace model) field#)
 
-                  defaults# ~(read-string (:raw-defaults model))
+                   defaults# ~(read-string (:raw-defaults model))
 
-                  val# (cond (opts# :assignment-required)
-                             (get ~'input (keyword field#))
+                   val# (cond (opts# :assignment-required)
+                              (get ~'input (keyword field#))
 
-                             (and (opts# :assignment-permitted) (contains? ~'input (keyword field#)))
-                             (get ~'input (keyword field#))
+                              (and (opts# :assignment-permitted) (contains? ~'input (keyword field#)))
+                              (get ~'input (keyword field#))
 
-                             (contains? defaults# field#)
-                             (let [default# (get defaults# field#)]
-                               (if (fn? default#)
-                                 (default# ~'db ~'input)
-                                 default#)))]
-              (when (not (nil? val#))
-                [namespaced-field# val#])))
-          (for [field# (keys ~(:backrefs model))]
-            (when-let [val# (get ~'input field#)]
-              [field# val#])))))
+                              (and include-defaults? (contains? defaults# field#))
+                              (let [default# (get defaults# field#)]
+                                (if (fn? default#)
+                                  (default# ~'db ~'input)
+                                  default#)))]
+               (when (not (nil? val#))
+                 [namespaced-field# val#])))
+           (for [field# (keys ~(:backrefs model))]
+             (when-let [val# (get ~'input field#)]
+               [field# val#]))))))
 
 (defn create-fn
   "The `create` database function for a given entity"
@@ -60,7 +62,7 @@
 
         (if (d/invoke ~'db (keyword ~(:namespace model) "exists?") ~'db ~'input)
           (vector
-           ~(generate-tx-map model)
+           ~(generate-tx-map model false) ; Exclude defaults cuz it's an update
            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txUpdated") ~'id] ;;annotate the transaction
            )
            (vector
