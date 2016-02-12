@@ -92,7 +92,7 @@
 
 (defn migration-txes
   "Generate the txes needed to go from the last migration to the new model"
-  [last-migration model]
+  [last-migration model regenerate-dbfuncs?]
   (let [old-model (:model last-migration)
         new-model (model->edn model)
         nm (:name model)]
@@ -105,46 +105,47 @@
 
       ;; Otherwise we generate migrations we need
       (concat
-        ;; If the fields are different we have to create or delete fields
-        (when (not= (:fields old-model) (:fields new-model))
-          (let [[added-fields deleted-fields common-fields] (data/diff (set (keys (:fields new-model))) (set  (keys (:fields old-model))))]
-            (println "Generating migrations for modified fields")
-            ;; Special case if we add and delete only one field and it's the same type --- we rename the field
-            (if (and (= 1 (count added-fields))
-                     (= 1 (count deleted-fields))
-                     (= (get new-model (first added-fields)) (get old-model (first deleted-fields))))
-              (do
-                (println "Renaming " (first deleted-fields) "to" (first added-fields))
-                [{:db/id    (keyword nm (first deleted-fields))
-                  :db/ident (keyword nm (first added-fields))}])
+       ;; If the fields are different we have to create or delete fields
+       (when (not= (:fields old-model) (:fields new-model))
+         (let [[added-fields deleted-fields common-fields] (data/diff (set (keys (:fields new-model))) (set  (keys (:fields old-model))))]
+           (println "Generating migrations for modified fields")
+           ;; Special case if we add and delete only one field and it's the same type --- we rename the field
+           (if (and (= 1 (count added-fields))
+                    (= 1 (count deleted-fields))
+                    (= (get new-model (first added-fields)) (get old-model (first deleted-fields))))
+             (do
+               (println "Renaming " (first deleted-fields) "to" (first added-fields))
+               [{:db/id    (keyword nm (first deleted-fields))
+                 :db/ident (keyword nm (first added-fields))}])
 
-              ;; Otherwise generate created and deleted fields
-              ;; If you change the property of an existing field such as cardinality or history
-              ;; you have to write the schema alteration yourself http://docs.datomic.com/schema.html#Schema-Alteration
-              (concat   ;; TODO: figure out if we modified any properties of existing fields
-                ;; Add new fields
-                (datomic-schema/generate-schema d/tempid [(assoc model :fields (select-keys (:fields new-model) added-fields))])
+             ;; Otherwise generate created and deleted fields
+             ;; If you change the property of an existing field such as cardinality or history
+             ;; you have to write the schema alteration yourself http://docs.datomic.com/schema.html#Schema-Alteration
+             (concat   ;; TODO: figure out if we modified any properties of existing fields
+              ;; Add new fields
+              (datomic-schema/generate-schema d/tempid [(assoc model :fields (select-keys (:fields new-model) added-fields))])
 
-                ;; Delete fields
-                ;; You can't delete fields in datomic, so we move them to the :unused namespace
-                ;; TODO what happens when you delete something with the same name 2x?
-                (for [field deleted-fields]
-                  {:db/id (keyword nm (first deleted-fields))
-                   :db/ident (keyword "unused" (str nm "/" field))})))))
+              ;; Delete fields
+              ;; You can't delete fields in datomic, so we move them to the :unused namespace
+              ;; TODO what happens when you delete something with the same name 2x?
+              (for [field deleted-fields]
+                {:db/id (keyword nm (first deleted-fields))
+                 :db/ident (keyword "unused" (str nm "/" field))})))))
 
-        ;; if db-funs have changed, regenerate them
-        ;; Compare with pr-str because database functions are objects
-        (when (not= (pr-str (:db-functions old-model)) (pr-str (:db-functions new-model)))
-          (println "Generating migrations for modified database-functions")
-          (db-functions-txes model))
+       ;; if db-funs have changed, regenerate them
+       ;; Compare with pr-str because database functions are objects
+       (when (not= (pr-str (:db-functions old-model)) (pr-str (:db-functions new-model)))
+         (println "Generating migrations for modified database-functions")
+         (db-functions-txes model))
 
-        ;; if the fields, or validators, or default values have changed
-        ;; regenerate the default-db-functions
-        (when (or (not= (:fields old-model) (:fields new-model))
-                  (not= (pr-str (:validators old-model)) (pr-str (:validators new-model)))
-                  (not= (pr-str (:defaults old-model)) (pr-str (:defaults new-model))))
-          (println "Generating migrations for default database functions")
-          (default-db-functions model))))))
+       ;; if the fields, or validators, or default values have changed
+       ;; regenerate the default-db-functions
+       (when (or regenerate-dbfuncs?
+                 (not= (:fields old-model) (:fields new-model))
+                 (not= (pr-str (:validators old-model)) (pr-str (:validators new-model)))
+                 (not= (pr-str (:defaults old-model)) (pr-str (:defaults new-model))))
+         (println "Generating migrations for default database functions")
+         (default-db-functions model))))))
 
 (defn get-migrations
   "Retrieve an model's migrations, returns map {modelname-date {:model model :txes [...]}}"
@@ -167,25 +168,34 @@
 
 (defn new-migration
   "Write a new migration for a model"
-  [{:keys [migration-dir] :as model} & [migration-name]]
-  (when (nil? migration-dir)
-    (throw (Exception. (str (:name model) " has no migration directory"))))
+  ([model]
+   (new-migration nil false))
+  ([model migration-name]
+   (new-migration migration-name false))
+  ([{:keys [migration-dir] :as model} migration-name regenerate-dbfuncs?]
+   (when (nil? migration-dir)
+     (throw (Exception. (str (:name model) " has no migration directory"))))
 
-  (let [serialized-model (model->edn model) ; we only write a part of the model to the migrations
-        migration-path (io/file "resources" migration-dir (migration-filename migration-name))
-        migrations (get-migrations model)
-        last-migration (second (last migrations))]
+   (let [serialized-model (model->edn model) ; we only write a part of the model to the migrations
+         migration-path (io/file "resources" migration-dir (migration-filename migration-name))
+         migrations (get-migrations model)
+         last-migration (second (last migrations))]
 
-    ;; Make the migration dir in case it doesn't exist
-    (println "Writing new migration to" (.getPath migration-path))
-    (io/make-parents migration-path)
+     ;; Make the migration dir in case it doesn't exist
+     (println "Writing new migration to" (.getPath migration-path))
+     (io/make-parents migration-path)
 
-    ;; If we have a previous migration, compute the diff for the txes, otherwise just use the initial txes
-    (if last-migration
-      (spit-edn migration-path {:model serialized-model
-                                :txes [(migration-txes last-migration model)]})
-      (spit-edn migration-path {:model serialized-model
-                                :txes [(initial-txes model)]}))))
+     ;; If we have a previous migration, compute the diff for the txes, otherwise just use the initial txes
+     (if last-migration
+       (spit-edn migration-path {:model serialized-model
+                                 :txes [(migration-txes last-migration model regenerate-dbfuncs?)]})
+       (spit-edn migration-path {:model serialized-model
+                                 :txes [(initial-txes model)]})))))
+
+(defn update-crustacean-migration
+  "Generates a migration when crustacean dbfuncs need to be updates"
+  [model]
+  (new-migration model "update-crustacean" true))
 
 (defn ensure-migrations-up-to-date
   "Check that an entity's migrations are up to date. Throws an error if it's not. Optionally specify the model var to throw a more detailed error message"
