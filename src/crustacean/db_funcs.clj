@@ -34,7 +34,7 @@
                                              (contains? defaults# field#)
                                              (let [default# (get defaults# field#)]
                                                (if (fn? default#)
-                                                 (default#)
+                                                 (default# db# input#)
                                                  default#)))]
                               (when (not (nil? val#))
                                 [namespaced-field# val#])))

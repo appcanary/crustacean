@@ -18,6 +18,11 @@
 ;; A dynamic var to hold all the models as they are defined
 (defonce ^:dynamic *models* {})
 
+(def date-format
+  "The date format we use for migration filenames"
+  (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
+    (.setTimeZone (java.util.TimeZone/getTimeZone "UTC"))))
+
 (defn model->edn
   "Serialize the model when writing to a migration file"
   [model]
@@ -142,21 +147,18 @@
   "Retrieve an model's migrations, returns map {modelname-date {:model model :txes [...]}}"
   [{:keys [migration-dir] :as model}]
 
-  (let [migrations (cp/resources migration-dir)]
-    (into {}
-          (for [[filename [uri]] migrations :when (re-matches #"^.*\.edn$" filename)]
-            (let [[_ base-name] (re-matches #"/?(.*)\.edn" filename)  ;; Drop the starting / (if there) and the .edn extension
-                  k (str (:name model) "-" base-name)]
-              [k (read-string  (slurp uri))])))))
+  (let [migrations (sort-by first (cp/resources migration-dir))]
+    (for [[filename [uri]] migrations :when (re-matches #"^.*\.edn$" filename)]
+      (let [[_ base-name] (re-matches #"/?(.*)\.edn" filename)  ;; Drop the starting / (if there) and the .edn extension
+            k (str (:name model) "-" base-name)]
+        [k (assoc (read-string  (slurp uri))
+                  :date base-name)]))))
 
 (defn migration-filename
   "Returns a filename using today's date"
   []
-  (-> ;; Format date (in UTC)
-   (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
-     (.setTimeZone (java.util.TimeZone/getTimeZone "UTC")))
-   (.format (java.util.Date.))
-   (str  ".edn")))
+  ;; Format date (in UTC)
+  (str (.format date-format (java.util.Date.)) ".edn"))
 
 (defn new-migration
   "Write a new migration for a model"
@@ -167,8 +169,7 @@
   (let [serialized-model (model->edn model) ; we only write a part of the model to the migrations
         migration-path (io/file "resources" migration-dir (migration-filename))
         migrations (get-migrations model)
-        ;; Maps don't maintain insertion order, so make sure we get the last migration.
-        last-migration (get migrations (last (sort (keys migrations))))]
+        last-migration (second (last migrations))]
 
     ;; Make the migration dir in case it doesn't exist
     (println "Writing new migration to" (.getPath migration-path))
@@ -181,19 +182,33 @@
       (spit-edn migration-path {:model serialized-model
                                 :txes [(initial-txes model)]}))))
 
+(defn ensure-migrations-up-to-date
+  "Check that an entity's migrations are up to date. Throws an error if it's not. Optionally specify the model var to throw a more detailed error message"
+  [model migrations & [model-var]]
+  (let [[_ {last-model :model}] (last migrations)]
+    (when-not (= (:fields last-model) (:fields model))
+      (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (or model-var (:name model)) "`"))))))
+
 (defn sync-model
   "Ensure that the database confirms to an entity's norms. Optionally set the var of the model (for better error messages) "
   [conn model & [model-var]]
-  (let [migrations (get-migrations model)
-        [_ {last-model :model}] (last migrations)]
+  (let [migrations (get-migrations model)]
+    (ensure-migrations-up-to-date model migrations)
+    (doseq [[migration-name migration] migrations]
+      (c/ensure-conforms conn {migration-name migration}))))
 
-    (when-not (= (:fields last-model) (:fields model))
-      (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (or model-var (:name model)) "`"))))
-
-    (c/ensure-conforms conn migrations)))
 
 (defn sync-all-models
   "Syncs all the models we know about (in *models*)"
   [conn]
-  (doseq [[model-var model] *models*]
-    (sync-model conn model model-var)))
+  (let [all-migrations (mapcat (fn [[model-var model]]
+                                 (let [migrations (get-migrations model)]
+                                   ;; Make sure that every model has fully up to date migrations
+                                   (ensure-migrations-up-to-date model migrations model-var)
+                                   migrations))
+                               *models*)
+        ;; On a fresh system we want to apply all migrations in date order
+        ;; Sort all the migrations by date
+        sorted-migrations (sort-by #(.parse date-format (:date (second %))) all-migrations)]
+    (doseq [[migration-name migration] sorted-migrations]
+      (c/ensure-conforms conn {migration-name migration}))))
