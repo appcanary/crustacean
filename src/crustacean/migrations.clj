@@ -235,4 +235,8 @@
         ;; Sort all the migrations by date
         sorted-migrations (sort-by #(.parse date-format (:date (second %))) all-migrations)]
     (doseq [[migration-name migration] sorted-migrations]
-      (c/ensure-conforms conn {migration-name migration}))))
+      ;; Make sure we sync schema up to every migration
+      (when-let [db-after (:db-after (try (deref (c/ensure-conforms conn {migration-name migration}))
+                                                  (catch Throwable e nil)))]
+        (d/sync-schema conn (d/basis-t db-after))))))
+
