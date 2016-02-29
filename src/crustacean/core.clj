@@ -269,7 +269,7 @@
                                   (assoc result (keyword field-name) func))
                                 ;; Start with the id field
                                 {:id (fnk [e] (:db/id e))
-                                 :_created-at (fnk [e] (let [tx (first (get e (keyword ns "_txCreated")))]
+                                 :created-at (fnk [e] (let [tx (first (get e (keyword ns "_txCreated")))]
                                                          {:id (:db/id tx)
                                                           :instant (:db/txInstant tx)}))}
                                 computed-fields)]
