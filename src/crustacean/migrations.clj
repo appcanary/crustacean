@@ -199,11 +199,18 @@
   [model]
   (new-migration model "update-crustacean" true))
 
+(defn- filter-refs
+  "Ignore the models being referenced by :ref fields. Useful when comparing migrations"
+  [fields]
+  (into {}
+        (for [[k [type opts & _]] fields]
+          [k [type opts]])))
+
 (defn ensure-migrations-up-to-date
   "Check that an entity's migrations are up to date. Throws an error if it's not. Optionally specify the model var to throw a more detailed error message"
   [model migrations & [model-var]]
   (let [[_ {last-model :model}] (last migrations)]
-    (when-not (= (:fields last-model) (:fields model))
+    (when-not (= (filter-refs (:fields last-model)) (filter-refs (:fields model)))
       (throw (Exception. (str "Entity missing migration. Please run `lein migrate " (or model-var (:name model)) "`"))))))
 
 (defn sync-model

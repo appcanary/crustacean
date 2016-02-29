@@ -1,5 +1,6 @@
 (ns crustacean.utils
-  (:require [puget.printer :as puget]))
+  (:require [puget.printer :as puget]
+            [potemkin.namespaces :refer [import-vars]]))
 
 (defn entity-exists?
   "Checks that an entity returned by d/pull actually exists"
@@ -104,3 +105,20 @@
                           '{:lang :clojure
                             :params ~params
                             :code (do ~@body)})))))
+
+
+(defmacro import-model
+  "Import a model's functions & schema into another namespace"
+  [ns]
+  `(import-vars [~ns
+                 ~'malformed?
+                 ~'exists?
+                 ~'pull
+                 ~'create
+                 ~'pull-many
+                 ~'all-with
+                 ~'find-by
+                 ~'find-or-create
+                 ~'DBInputSchema
+                 ~'APIInputSchema
+                 ~'OutputSchema]))
