@@ -192,7 +192,8 @@
 (defn ->output-schema
   "The output schema for a given entity"
   [entity]
-  (-> (into {:id Long}
+  (-> (into {:id Long
+             :created-at java.util.Date}
             (concat
              (for [[field spec] (:fields entity)]
                [(s/optional-key (keyword field)) (s/maybe (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec))))])
@@ -270,8 +271,7 @@
                                 ;; Start with the id field
                                 {:id (fnk [e] (:db/id e))
                                  :created-at (fnk [e] (let [tx (first (get e (keyword ns "_txCreated")))]
-                                                         {:id (:db/id tx)
-                                                          :instant (:db/txInstant tx)}))}
+                                                        (:db/txInstant tx)))}
                                 computed-fields)]
 
      (reduce (fn [acc [field-name [field-type field-opts ref-model]]]
