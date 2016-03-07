@@ -193,7 +193,7 @@
   "The output schema for a given entity"
   [entity]
   (-> (into {:id Long
-             :created-at java.util.Date}
+             :created-at (s/maybe java.util.Date)}
             (concat
              (for [[field spec] (:fields entity)]
                [(s/optional-key (keyword field)) (s/maybe (if (= :ref (first spec)) s/Any (eval (field-spec->schema spec))))])
