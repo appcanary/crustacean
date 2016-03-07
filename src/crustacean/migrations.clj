@@ -238,7 +238,7 @@
       ;; Make sure we sync schema up to every migration
       ;; Occasionally, we have to wait for a given migration to conclude
       ;; prior to running the next one.
-      (when-let [db-after (:db-after (try (deref (c/ensure-conforms conn {migration-name migration}))
-                                                  (catch Throwable e nil)))]
-        (d/sync-schema conn (d/basis-t db-after))))))
+      (when-let [transact-result (c/ensure-conforms conn {migration-name migration})]
+        (let [db-after (:db-after @transact-result)]
+          (d/sync-schema conn (d/basis-t db-after)))))))
 
