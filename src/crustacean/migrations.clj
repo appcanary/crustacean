@@ -36,21 +36,21 @@
 (defn tx-markers
   "Transaction for an model's txMarkers"
   [model]
-  [{:db/id #db/id[:db.part/db]
+  [{:db/id (d/tempid :db.part/db)
     :db/ident (keyword (:namespace model) "txCreated")
     :db/valueType :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/index true
     :db.install/_attribute :db.part/db}
 
-   {:db/id #db/id[:db.part/db]
+   {:db/id (d/tempid :db.part/db)
     :db/ident (keyword (:namespace model) "txUpdated")
     :db/valueType :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/index true
     :db.install/_attribute :db.part/db}
 
-   {:db/id #db/id[:db.part/db]
+   {:db/id (d/tempid :db.part/db)
     :db/ident (keyword (:namespace model) "txDeleted")
     :db/valueType :db.type/ref
     :db/cardinality :db.cardinality/many
@@ -63,7 +63,7 @@
   [{:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "exists?")
     :db/fn (db-funcs/exists-fn model)}
-   {:db/id #db/id[:db.part/user]
+   {:db/id (d/tempid :db.part/user)
     :db/ident (keyword (:namespace model) "malformed?")
     :db/fn (db-funcs/malformed-fn model)}
    {:db/id (d/tempid :db.part/user)
@@ -77,7 +77,7 @@
   "The db functions txes for a model"
   [{:keys[db-functions] :as model}]
   (for [[fn-name fn] db-functions]
-    {:db/id #db/id[:db.part/user]
+    {:db/id (d/tempid :db.part/user)
      :db/ident (keyword (:namespace model) fn-name)
      :db/fn fn}))
 
