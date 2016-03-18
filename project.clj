@@ -13,7 +13,7 @@
                  [cpath-clj "0.1.2"]]
   :profiles {:repl {:main user}
              :1.7 {:dependencies [[org.clojure/clojure "1.7.0"]]}
-             :1.8 {:dependencies [[org.clojure/clojure "1.8.0-RC4"]]}
+             :1.8 {:dependencies [[org.clojure/clojure "1.8.0"]]}
              :dev {:source-paths ["dev"]
                    :plugins [[lein-midje "3.1.3"]]
                    :dependencies [[midje "1.7.0-beta1"]]}})
