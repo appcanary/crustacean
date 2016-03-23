@@ -85,7 +85,7 @@
                    ;; options.
                    :backrefs
                    [:backrefs (->> (for [[nm opt] values]
-                                     [(keyword nm) opt])
+                                     [nm opt])
                                    (into {}))]
 
 
