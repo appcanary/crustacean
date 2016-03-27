@@ -287,8 +287,13 @@
                          (assoc acc field-key (fnk [db e]
                                                    (let [sub-entity (qualified-field e)]
                                                      (sub-graph {:e sub-entity :db db}))))))
-                     ;; else we don't include it
-                     acc)
+                     ;; else we include a vector of ids
+                     (if (contains? field-opts :many)
+                       (assoc acc field-key (fnk [e]
+                                                 (mapv :db/id (qualified-field e))))
+
+                       (assoc acc field-key (fnk [e]
+                                                 (:db/id (qualified-field e))))))
 
                    ;; if it's not a ref act normally
                    (assoc acc field-key (fnk [e] (qualified-field e))))))
