@@ -20,8 +20,8 @@
 
 ;; ## The main macro
 
-(defn defentity*
-  "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defentity`"
+(defn defmodel*
+  "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defmodel`"
   [nm forms]
   (let [model (into
                ;; The next three fields are required by yuppiechef's datomic-schema
@@ -105,10 +105,10 @@
            :raw-defaults (pr-str (:defaults model))
            :raw-validators (pr-str (:validators model)))))
 
-(defmacro defentity
+(defmacro defmodel
   "Takes an entity specification in a friendly syntax and creates the entity, along with all of the requisite functions"
   [nm & forms]
-  `(do (def ~nm ~(defentity* nm forms))
+  `(do (def ~nm ~(defmodel* nm forms))
        (def ~'malformed? (->malformed? ~nm))
        (def ~'exists? (->exists? ~nm))
        (def ~'graph (->graph ~nm))

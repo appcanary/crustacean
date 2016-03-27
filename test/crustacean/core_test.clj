@@ -8,13 +8,13 @@
 
 
 ;;A model we use for a reference
-(defentity model2
+(defmodel model2
   (:fields [field1 :long]))
 
 
-(deftest test-defentity*
+(deftest test-defmodel*
   (let [model
-        (defentity* 'model
+        (defmodel* 'model
                 '((:migration-dir "testdata/entity.edn")
                   (:fields [field1 :keyword :unique-value :assignment-required]
                            [field2 :string :unique-identity :assignment-permitted]
@@ -119,7 +119,7 @@
   (is (= {} (->input-schema* {:backrefs {:field :not-a-thing}}))))
 
 (deftest test-generate-query
-  (let [model (defentity* 'model
+  (let [model (defmodel* 'model
     '((:fields [str-field :string]
                [bool-field :boolean])))]
     ;; Handle queries with one param, no value
