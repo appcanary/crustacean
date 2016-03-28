@@ -7,7 +7,37 @@
 
 Crustacean provides a simplified syntax for defining models in Datomic. 
 
-## The idea
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+# Table of contents
+
+- [The idea](#the-idea)
+- [Installation](#installation)
+- [Defining a model](#defining-a-model)
+  - [`:migration-dir`](#migration-dir)
+  - [`:fields`](#fields)
+    - [`:ref` fields](#ref-fields)
+  - [`:backrefs`](#backrefs)
+  - [`:defaults`](#defaults)
+  - [`:validators`](#validators)
+  - [`:computed-fields`](#computed-fields)
+  - [`:db-functions`](#db-functions)
+- [Migrating a model](#migrating-a-model)
+  - [Generating migrations](#generating-migrations)
+  - [Applying migrations](#applying-migrations)
+- [Creating) an entity](#creating-an-entity)
+- [Updating an entity](#updating-an-entity)
+- [Querying data](#querying-data)
+  - [`pull`](#pull)
+  - [`find-by`](#find-by)
+  - [`all-with`](#all-with)
+- [The entity representation](#the-entity-representation)
+  - [`:refs`](#refs)
+  - [License](#license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+# The idea
 
 Datomic doesn't have a concept of "tables", any entity can have any attribute,
 but it's good practice to namespace attributes, i.e. `:user/name` and
@@ -30,7 +60,7 @@ You get the following:
 5) Entities in your application code represented as lazy maps, complete with arbitraty computed fields. It's like the Datomic Entity API on steroids
 6) Migrations
 
-## Installation
+# Installation
 
 Add `[appcanary/crustacean "0.1.10-SNAPSHOT"]` snapshot to your `project.clj`.
 
@@ -44,7 +74,7 @@ put the jar in the Transactor's `lib` directory.
 
 You can find the correct schema jar here: https://clojars.org/repo/prismatic/schema/1.0.4/schema-1.0.4.jar
 
-## Defining a model
+# Defining a model
 
 You define a model with `defmodel`. A basic example:
 
@@ -91,7 +121,7 @@ It will create the following Clojure vars in the `models.user` namespace
 
 The above functions and attributes will be discussed in detail below, but first, here are all of the possible inputs to `defmodek`:
 
-### `:migration-dir`
+## `:migration-dir`
 
 ```clojure
 (defmodel user
@@ -101,7 +131,7 @@ The above functions and attributes will be discussed in detail below, but first,
 
 A string specifiying the directory to store migrations in. It will be a subdirectory of `PROJECTROOT/resources`, and will be created if it doesn't exist when you generate your first migration.
 
-### `:fields`
+## `:fields`
 
 ```clojure
 (defmodel user
@@ -151,7 +181,7 @@ and you **must** specify all `:assignment-required` attributes during `create`.
 Attributes with neither of these field should be set with regular Datomic
 transactions.
 
-#### `:ref` fields
+### `:ref` fields
 
 `:ref` fields have a special property in that they can be specified with the model referenced.
 
@@ -167,7 +197,7 @@ If there is an `article` model defined, in `models.article/article`, we can spec
 
 Afterwards, when we query the `user` model, we will be get `artifact` results containing all the artifact fields. Otherwise we would just get a list of `artifact` ids.
 
-### `:backrefs`
+## `:backrefs`
 
 ```clojure
 (defmodel user
@@ -184,7 +214,7 @@ For instance `(user/all-with db :name "bob" :company/_users some-company-id)` wi
 
 Backrefs can be included in `create` or `upsert` calls if the `:assignment-permitted` or `:assignment-required` option is specified.
 
-### `:defaults`
+## `:defaults`
 
 ```clojure
 (defmodel user
@@ -213,7 +243,7 @@ Note also, that, if you're generating a UUID, you want to wrap it in a function:
 (:defaults [uuid (fn [_ _] (d/squuid))])
 ```
 
-### `:validators`
+## `:validators`
 
 ```clojure
 (defmodel user
@@ -226,7 +256,7 @@ A sequence of vectors consisting of a symbol corresponding to a field name and e
 
 Validators are called on every `create` and `upsert` to validate the contents of a field. If the validator is a regex pattern, it must match. If it's a function, it takes the potential field value. If it's `nil` or `false`, the value is invalid.
 
-### `:computed-fields`
+## `:computed-fields`
 
 ```clojure
 (ns models.user
@@ -263,7 +293,7 @@ The following are thus also valid ways of writing the `name-length` function abo
                                   (count (:user/name (d/pull db [:user/name] id))))])
 ```
 
-### `:db-functions`
+## `:db-functions`
 
 ```
 (def update-email-fn
@@ -296,11 +326,11 @@ Crustacean provides a macro, `crustacean.utils/defn-db` to make defining databas
   (:db-functions [update-email update-email-fn]))
 ```
 
-## Migrating a model
+# Migrating a model
 
 Crustacean allows us to generate and apply migrations for models it defines.
 
-### Generating migrations
+## Generating migrations
 
 After we create the `user` model,
 
@@ -476,13 +506,13 @@ The above transactions need to be added to the `:txes` list of a migration by ha
 
 There is also a special case of `new-migration`, for when you want to regenerate the database functions of a model, even if it hasn't been changed. You can call it as `(new-migration entity "some-migration-name" true)` to do so. This is useful if some crustacean behavior has been updated, and you need to update your models accordingly.
 
-### Applying migrations
+## Applying migrations
 
 Migrations for a model can be applied by calling `(crustacean.migrations/sync-model conn model)`.
 
 Crustacean will keep a log of every model defined with `defmodel`, and you can sync all models by running `(crustacean.migrations/sync-all-models conn)`
 
-## Creating) an entity
+# Creating) an entity
 
 After we define a model, as above
 
@@ -518,7 +548,7 @@ We can also create an entity by calling the `:user/create` database function:
 
 Note that we expect a tempid as the argument. This is useful when you want to string together a series of `create` calls in one transaction that depend on eachother.
 
-## Updating an entity
+# Updating an entity
 
 We can use datomics upsert behavior to update an entity by calling `upsert`:
 
@@ -532,7 +562,7 @@ As with `create`, we can calle the `:user/upsert` database function directly:
 (d/transact conn [:user/upsert (d/tempid :db.part/user) {:name "Sally's new name"
                                                          :email "sallybowles@example.com"}])
 ```
-## Querying data
+# Querying data
 
 Crustacean generates three functions for querying data in each namespace `defmodel` is called in:
 
@@ -540,7 +570,7 @@ Crustacean generates three functions for querying data in each namespace `defmod
 - `all-with`
 - `find-by`
 
-### `pull` 
+## `pull` 
 
 `pull` is used to return a single entity from the db given it's id
 
@@ -549,7 +579,7 @@ Crustacean generates three functions for querying data in each namespace `defmod
 ;; => {:created-at #inst "2016-03-28T01:58:42.766-00:00", :name "Sally", :articles [], :email "sallybowles@example.com", :id 17592186045425)
 ```
 
-### `find-by`
+## `find-by`
 
 `find-by` returns a single entity based on a query, consisting of a list of `:field`s and values:
 
@@ -558,7 +588,7 @@ Crustacean generates three functions for querying data in each namespace `defmod
 ;; => {:created-at #inst "2016-03-28T01:58:42.766-00:00", :name "Sally", :articles [], :email "sallybowles@example.com", :id 17592186045425}
 ```
 
-### `all-with`
+## `all-with`
 
 `all-with` returns a lazy-seq of entities based on a query, consisting of a list of `:field`s and values
 
@@ -602,7 +632,7 @@ You can also use `all-with` with only an attribute name to get all of the entiti
   :id 17592186045437})
 ```
 
-## The entity representation
+# The entity representation
 
 When ever we create, update, or query an entity, Crustacean returns the entity represented as a map.
 
@@ -620,7 +650,7 @@ The map contains all of the fields of the entity, along with two special fields,
 
 If the model contains `:computed-fields` those are returned here as well.
 
-### `:refs`
+## `:refs`
 
 References are returned as either ids or as maps, depending on whether the field type is defined as `:ref` or `[:ref some.model/name]`
 
