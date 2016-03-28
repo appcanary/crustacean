@@ -278,7 +278,7 @@ We use `fnk` from Prismatic's [Plumbing](https://github.com/plumatic/plumbing). 
 - `e` will be the Datomic [entity api](http://docs.datomic.com/entities.html) object for the entity
 - `db` is the db
 - `id` is the entity id
-- arbitrrty fields (computed or not) can be referenced by their names.
+- arbitrary fields (computed or not) can be referenced by their names.
 
 The following are thus also valid ways of writing the `name-length` function above:
 
