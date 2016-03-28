@@ -33,7 +33,7 @@ Crustacean provides a simplified syntax for defining models in Datomic.
   - [`all-with`](#all-with)
 - [The entity representation](#the-entity-representation)
   - [`:refs`](#refs)
-  - [License](#license)
+- [License](#license)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -53,12 +53,12 @@ to manipulate that model inside that namespace.
 
 You get the following:
 
-1) A simplified syntax for defining Datomic models.
-2) Both transactor function and Clojure functions to `create` and `upsert` entities of each model.
-3) Arbitrary data validations and default values for any attribute.
-4) An ActiveRecord-inspired query DSL to cover the most common kinds of queries without having to use the Datomic query API.
-5) Entities in your application code represented as lazy maps, complete with arbitraty computed fields. It's like the Datomic Entity API on steroids
-6) Migrations
+1. A simplified syntax for defining Datomic models.
+2. Both transactor function and Clojure functions to `create` and `upsert` entities of each model.
+3. Arbitrary data validations and default values for any attribute.
+4. An ActiveRecord-inspired query DSL to cover the most common kinds of queries without having to use the Datomic query API.
+5. Entities in your application code represented as lazy maps, complete with arbitraty computed fields. It's like the Datomic Entity API on steroids
+6. Migrations
 
 # Installation
 
@@ -165,7 +165,7 @@ The Datomic options directly correlate to schema options in Datomic. Note that
 we default to `:db/cardinality :db.cardinality/one` if `:many` isn't specified.
 We also resort to the following Datomic defaults:
 
-```
+```clojure
 :db/index <false>
 :db/fulltext <false>
 :db/noHistory <false>
@@ -235,7 +235,7 @@ It may be useful to define a field without `:assignment-permitted` or `:assignme
 
 Note also, that, if you're generating a UUID, you want to wrap it in a function:
 
-```
+```clojure
 ;; This is NOT what you you want. (d/squuid) will be called once and all entities will share a UUID.
 (:defaults [uuid (d/squuid)])
 
@@ -295,7 +295,7 @@ The following are thus also valid ways of writing the `name-length` function abo
 
 ## `:db-functions`
 
-```
+```clojure
 (def update-email-fn
   (d/function {:lang :clojure
                :params ''[db id new-email]
@@ -695,7 +695,7 @@ Suppose if `user` is instead defined as
 
 We can now see a representation of the article when we query the user:
 
-```
+```clojure
 (user/pull db 17592186045425)
 ;; =>
 {:created-at #inst "2016-03-28T01:58:42.766-00:00",
@@ -708,10 +708,7 @@ We can now see a representation of the article when we query the user:
  :id 17592186045425}
 ```
 
-
-
-
-## License
+# License
 
 Copyright © 2016 Canary Computer Corporation
 
