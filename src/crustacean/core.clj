@@ -114,6 +114,7 @@
        (def ~'graph (->graph ~nm))
        (def ~'pull (->pull ~nm ~'graph))
        (def ~'create (->create ~nm ~'pull))
+       (def ~'upsert (->upsert ~nm ~'pull))
        (def ~'pull-many (->pull-many ~nm ~'pull))
        (def ~'find-by (->find-by ~nm ~'pull))
        (def ~'all-with (->all-with ~nm ~'pull-many))
@@ -228,6 +229,19 @@
         (assert (not ((->exists? entity) (d/db conn) input)))
         (let [tempid (d/tempid :db.part/user -1)
               {:keys [tempids db-after]} @(d/transact conn [[create-fn tempid input]])
+              id (d/resolve-tempid db-after tempids tempid)]
+          (pull db-after id))))))
+
+;; Entity Updating
+(defn ->upsert
+  "The `upsert` function for a given entity"
+  [entity pull]
+  (let [upsert-fn (keyword (:namespace entity) "upsert")]
+    (fn [conn dirty-input]
+      (let [input (remove-nils dirty-input)]
+        (s/validate (:input-schema entity) input)
+        (let [tempid (d/tempid :db.part/user -1)
+              {:keys [tempids db-after]} @(d/transact conn [[upsert-fn tempid input]])
               id (d/resolve-tempid db-after tempids tempid)]
           (pull db-after id))))))
 
