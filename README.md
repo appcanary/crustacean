@@ -492,7 +492,7 @@ and run `new-migration` again, you'll get the following migration
 
 We only generated a schema element for the new field, and modified the database functions accordingly.
 
-We can automatically handle the following schema alterations
+We can automatically handle the following schema alterations:
 
 - Creating new fields
 - Deleting fields (they are renamed to `:unused/old-field/name`, as you can't [retract an attribute](https://groups.google.com/forum/#!msg/datomic/7-9lUE9Nm4k/fOhAvt-gyOIJ).)
@@ -505,6 +505,8 @@ We don't handle:
 The above transactions need to be added to the `:txes` list of a migration by hand.
 
 There is also a special case of `new-migration`, for when you want to regenerate the database functions of a model, even if it hasn't been changed. You can call it as `(new-migration entity "some-migration-name" true)` to do so. This is useful if some crustacean behavior has been updated, and you need to update your models accordingly.
+
+If you ever want to have a migration file that is not applied, you can add `:skip-migration true` to the map.
 
 ## Applying migrations
 
