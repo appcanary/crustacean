@@ -5,7 +5,7 @@
 
 > - From [Consider the Lobster](http://www.gourmet.com/magazine/2000s/2004/08/consider_the_lobster) by David Foster Wallace
 
-Crustacean provides a simplified syntax for defining models in Datomic. 
+Crustacean provides a simplified syntax for defining models in Datomic, allows you to generate migrations, and handles Create, Read, and Upsert operations on these models. 
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
