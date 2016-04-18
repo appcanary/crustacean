@@ -20,8 +20,8 @@
 
 ;; ## The main macro
 
-(defn defentity*
-  "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defentity`"
+(defn defmodel*
+  "Takes an entity specification in a friendly syntax and creates the entity. Used in implementation of `defmodel`"
   [nm forms]
   (let [model (into
                ;; The next three fields are required by yuppiechef's datomic-schema
@@ -85,7 +85,7 @@
                    ;; options.
                    :backrefs
                    [:backrefs (->> (for [[nm opt] values]
-                                     [(keyword nm) opt])
+                                     [nm opt])
                                    (into {}))]
 
 
@@ -105,15 +105,16 @@
            :raw-defaults (pr-str (:defaults model))
            :raw-validators (pr-str (:validators model)))))
 
-(defmacro defentity
+(defmacro defmodel
   "Takes an entity specification in a friendly syntax and creates the entity, along with all of the requisite functions"
   [nm & forms]
-  `(do (def ~nm ~(defentity* nm forms))
+  `(do (def ~nm ~(defmodel* nm forms))
        (def ~'malformed? (->malformed? ~nm))
        (def ~'exists? (->exists? ~nm))
        (def ~'graph (->graph ~nm))
        (def ~'pull (->pull ~nm ~'graph))
        (def ~'create (->create ~nm ~'pull))
+       (def ~'upsert (->upsert ~nm ~'pull))
        (def ~'pull-many (->pull-many ~nm ~'pull))
        (def ~'find-by (->find-by ~nm ~'pull))
        (def ~'all-with (->all-with ~nm ~'pull-many))
@@ -231,6 +232,19 @@
               id (d/resolve-tempid db-after tempids tempid)]
           (pull db-after id))))))
 
+;; Entity Updating
+(defn ->upsert
+  "The `upsert` function for a given entity"
+  [entity pull]
+  (let [upsert-fn (keyword (:namespace entity) "upsert")]
+    (fn [conn dirty-input]
+      (let [input (remove-nils dirty-input)]
+        (s/validate (:input-schema entity) input)
+        (let [tempid (d/tempid :db.part/user -1)
+              {:keys [tempids db-after]} @(d/transact conn [[upsert-fn tempid input]])
+              id (d/resolve-tempid db-after tempids tempid)]
+          (pull db-after id))))))
+
 ;; ## Entity Access
 (defn generate-query
   "Generates the datomic query given a model and arg-pairs, a vector of pairs of [:field value], where value can be nil"
@@ -287,8 +301,13 @@
                          (assoc acc field-key (fnk [db e]
                                                    (let [sub-entity (qualified-field e)]
                                                      (sub-graph {:e sub-entity :db db}))))))
-                     ;; else we don't include it
-                     acc)
+                     ;; else we include a vector of ids
+                     (if (contains? field-opts :many)
+                       (assoc acc field-key (fnk [e]
+                                                 (mapv :db/id (qualified-field e))))
+
+                       (assoc acc field-key (fnk [e]
+                                                 (:db/id (qualified-field e))))))
 
                    ;; if it's not a ref act normally
                    (assoc acc field-key (fnk [e] (qualified-field e))))))

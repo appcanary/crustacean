@@ -20,7 +20,7 @@
 
 (def date-format
   "The date format we use for migration filenames"
-  (doto (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
+  (doto (java.text.SimpleDateFormat. "yyyyMMddHHmmss")
     (.setTimeZone (java.util.TimeZone/getTimeZone "UTC"))))
 
 (defn model->edn
@@ -156,16 +156,17 @@
   (let [migrations (sort-by first (cp/resources migration-dir))]
     (for [[filename [uri]] migrations :when (re-matches #"^.*\.edn$" filename)]
       (let [[_ base-name] (re-matches #"/?(.*)\.edn" filename)  ;; Drop the starting / (if there) and the .edn extension
-            k (str (:name model) "-" base-name)]
-        [k (assoc (read-string  (slurp uri))
-                  :date base-name)]))))
+            k (str (:name model) "-" base-name)
+            migration (assoc (read-string  (slurp uri))
+                             :date base-name)]
+        [k migration]))))
 
 (defn migration-filename
   "Returns a filename using today's date"
   [migration-name]
   (let [date (.format date-format (java.util.Date.))]
     (if migration-name
-      (str date "-" migration-name ".edn")
+      (str date "_" migration-name ".edn")
       (str date ".edn"))))
 
 (defn new-migration
@@ -219,7 +220,8 @@
   (let [migrations (get-migrations model)]
     (ensure-migrations-up-to-date model migrations)
     (doseq [[migration-name migration] migrations]
-      (c/ensure-conforms conn {migration-name migration}))))
+      (when-not (:skip-migration migration)
+        (c/ensure-conforms conn {migration-name migration})))))
 
 
 (defn sync-all-models
@@ -233,12 +235,13 @@
                                *models*)
         ;; On a fresh system we want to apply all migrations in date order
         ;; Sort all the migrations by date
-        sorted-migrations (sort-by #(.parse date-format (:date (second %))) all-migrations)]
+        sorted-migrations (sort-by #(:date (second %)) all-migrations)]
     (doseq [[migration-name migration] sorted-migrations]
       ;; Make sure we sync schema up to every migration
       ;; Occasionally, we have to wait for a given migration to conclude
       ;; prior to running the next one.
-      (when-let [transact-result (c/ensure-conforms conn {migration-name migration})]
-        (let [db-after (:db-after @transact-result)]
-          (d/sync-schema conn (d/basis-t db-after)))))))
+      (when-not (:skip-migration migration)
+        (when-let [transact-result (c/ensure-conforms conn {migration-name migration})]
+          (let [db-after (:db-after @transact-result)]
+          (d/sync-schema conn (d/basis-t db-after))))))))
 
