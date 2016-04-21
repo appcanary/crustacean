@@ -35,20 +35,19 @@
 (defn create-fn
   "The `create` database function for a given entity"
   [entity]
-    (d/function
-     `{:lang :clojure
-       :params [~'db ~'id ~'input]
-       :code
-       (if-let [malformed# (d/invoke ~'db (keyword ~(:namespace entity) "malformed?") ~'input)]
-         (throw (IllegalArgumentException. (str malformed#)))
+  (d/function
+   `{:lang :clojure
+     :params [~'db ~'id ~'input]
+     :code
+     (if-let [malformed# (d/invoke ~'db (keyword ~(:namespace entity) "malformed?") ~'input)]
+       (throw (IllegalArgumentException. (str malformed#)))
+       (if (d/invoke ~'db (keyword ~(:namespace entity) "exists?") ~'db ~'input)
+         (throw (IllegalStateException. "entity already exists"))
 
-         (if (d/invoke ~'db (keyword ~(:namespace entity) "exists?") ~'db ~'input)
-           (throw (IllegalStateException. "entity already exists"))
-
-           (vector
-            ~(generate-tx-map entity)
-            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace entity) "txCreated") ~'id] ;;annotate the transactionx
-            )))}))
+         (vector
+          ~(generate-tx-map entity)
+          [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace entity) "txCreated") ~'id] ;;annotate the transactionx
+          )))}))
 
 (defn upsert-fn
   "The `upsert` database function for the model"
