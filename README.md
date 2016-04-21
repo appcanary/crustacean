@@ -576,6 +576,25 @@ As with `create`, we can call the `:user/upsert` database function directly:
                                                          :email "sallybowles@example.com"}])
 ```
 
+If we want to update an entity with a known ID, we can specify in the function
+```clojure
+(models.user/upsert conn entity-id {:name "Sally's new name"
+                                    :email "sallybowles@example.com"})
+```
+
+or in the transactor function:
+
+```clojure
+(d/transact conn [:user/upsert entity-id {:name "Sally's new name"
+                                          :email "sallybowles@example.com"}])
+```
+
+**Note:** If you specify an ID it will be assumed that this is the element you want to update (even if it has a different or unspecified unique-identity). Make sure you're actually updating the right thing!
+
+When `upsert` is updating, it will be smart about many-valued attributes. Updating an attribute with the value `[1 2 3]` to have the value `[2 3 4]` will add `4` **and** retract `1`. Normal datomic doesn't do this!
+
+
+
 # Querying data
 
 Crustacean generates three functions for querying data in each namespace `defmodel` is called in:
