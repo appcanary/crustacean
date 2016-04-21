@@ -86,11 +86,12 @@
                                            (map (fn [[a# b#]]
                                                   [(keyword ~(:namespace entity) (name a#)) (get input# a#)
                                                    (keyword ~(:namespace entity) (name b#)) (get input# b#)])))]
-             (seq (concat
-                   (d/q {:find '[[~'?e ...]] :in '[~'$ [[~'?attr ~'?value]]] :where '[[~'?e ~'?attr ~'?value]]} db# unique-key-pairs#)
-                   (mapcat (fn [[attr1# value1# attr2# value2#]]
-                             (d/q {:find '[[~'?e ...]] :in '[~'$ ~'?value1 ~'?value2] :where `[[~'~'?e ~attr1# ~'~'?value1] [~'~'?e  ~attr2# ~'~'?value2]]} db# value1# value2#))
-                           composite-key-pairs#))))}))
+             (or
+              (d/q {:find '[~'?e .] :in '[~'$ [[~'?attr ~'?value]]] :where '[[~'?e ~'?attr ~'?value]]} db# unique-key-pairs#)
+              (some identity
+                    (mapcat (fn [[attr1# value1# attr2# value2#]]
+                              (d/q {:find '[~'?e .] :in '[~'$ ~'?value1 ~'?value2] :where `[[~'~'?e ~attr1# ~'~'?value1] [~'~'?e  ~attr2# ~'~'?value2]]} db# value1# value2#))
+                            composite-key-pairs#))))}))
 
 (defn malformed-fn
   "The malformed? database function for a given entity"
