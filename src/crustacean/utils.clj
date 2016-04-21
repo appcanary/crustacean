@@ -115,6 +115,7 @@
                  ~'exists?
                  ~'pull
                  ~'create
+                 ~'upsert
                  ~'pull-many
                  ~'all-with
                  ~'find-by

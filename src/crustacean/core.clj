@@ -239,7 +239,7 @@
   (let [upsert-fn (keyword (:namespace entity) "upsert")]
     (fn [conn dirty-input]
       (let [input (remove-nils dirty-input)]
-        (s/validate (:input-schema entity) input)
+        #_(s/validate (:input-schema entity) input)
         (let [tempid (d/tempid :db.part/user -1)
               {:keys [tempids db-after]} @(d/transact conn [[upsert-fn tempid input]])
               id (d/resolve-tempid db-after tempids tempid)]

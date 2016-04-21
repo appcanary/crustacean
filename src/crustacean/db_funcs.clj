@@ -56,19 +56,48 @@
    `{:lang :clojure
      :params [~'db ~'id ~'input]
      :code
-     (if-let [malformed# (d/invoke ~'db (keyword ~(:namespace model) "malformed?") ~'input)]
-        (throw (IllegalArgumentException. (str malformed#)))
+     (if-let [malformed# false #_(d/invoke ~'db (keyword ~(:namespace model) "malformed?") ~'input)]
+       ;; Temporarily getting rid of this malformed? check because we may want to update entities in situations without specifying required keys (or specifying keys that aren't permitted)
+       ;; I need to rewrite how malformed is handled for upserts/updates
+       (throw (IllegalArgumentException. (str malformed#)))
 
-        (if (d/invoke ~'db (keyword ~(:namespace model) "exists?") ~'db ~'input)
-          (vector
-           ~(generate-tx-map model false) ; Exclude defaults cuz it's an update
-           [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txUpdated") ~'id] ;;annotate the transaction
-           )
-           (vector
-            ~(generate-tx-map model)
-            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txCreated") ~'id] ;;annotate the transaction
-            )
-          ))}))
+       (if-let [entity-id# (if (= Long (class ~'id))
+                                        ; If the id is a long it's not a tempid so it's an update
+                                        ; tempids are datomic.db.DbId
+                             ~'id
+                             ;; Maybe the entity exists
+                             (d/invoke ~'db (keyword ~(:namespace model) "exists?") ~'db ~'input))]
+         (let [entity# (d/entity ~'db entity-id#)
+               txes# (->> (for [[k# v#] ~'input]
+                           (let [namespaced-key# (keyword ~(:namespace model) (name k#))
+                                 [type# opts#] (get ~(:fields model) (name k#))
+                                 current# (cond->> (get entity# namespaced-key#)
+
+                                            (= :ref type#)
+                                            (map :db/id))]
+                             (cond (and (nil? v#) current#)
+                                   [[:db/retract ~'id namespaced-key# v#]]
+
+                                   (contains? opts# :many)
+                                   (let [[to-add# to-retract#] (clojure.data/diff (set v#) current#)]
+                                     (concat
+                                      (for [x# to-add#]
+                                        [:db/add ~'id namespaced-key# x#])
+                                      (for [x# to-retract#]
+                                        [:db/retract ~'id namespaced-key# x#])))
+
+                                   (not= v# current#)
+                                   (do (println v# current#)
+                                       [[:db/add ~'id namespaced-key# v#]]))))
+                         (apply concat)
+                         (remove nil?))]
+           (when (not-empty txes#)
+             (conj txes#
+                   [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txUpdated") ~'id])))
+         (vector
+          ~(generate-tx-map model)
+          [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txCreated") ~'id] ;;annotate the transaction
+          )))}))
 
 (defn exists-fn
   "The `exists?` database function for a given entity"
