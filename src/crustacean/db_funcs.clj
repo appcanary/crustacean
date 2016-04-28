@@ -60,15 +60,20 @@
      (if-let [malformed# (d/invoke ~'db (keyword ~(:namespace model) "malformed?") ~'input)]
         (throw (IllegalArgumentException. (str malformed#)))
 
-        (if (d/invoke ~'db (keyword ~(:namespace model) "exists?") ~'db ~'input)
+        (if (or
+             ;; If the id is a long it's not a tempid so it's an update
+             ;; tempids are datomic.db.DbId
+             (= Long (class ~'id))
+             ;; Maybe the entity exists
+             (d/invoke ~'db (keyword ~(:namespace model) "exists?") ~'db ~'input))
           (vector
            ~(generate-tx-map model false) ; Exclude defaults cuz it's an update
            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txUpdated") ~'id] ;;annotate the transaction
            )
-           (vector
-            ~(generate-tx-map model)
-            [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txCreated") ~'id] ;;annotate the transaction
-            )
+          (vector
+           ~(generate-tx-map model)
+           [:db/add (d/tempid :db.part/tx) ~(keyword (:namespace model) "txCreated") ~'id] ;;annotate the transaction
+           )
           ))}))
 
 (defn exists-fn
